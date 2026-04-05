@@ -20,9 +20,9 @@ Produces:
 
 Usage:
   python3 field_checklist.py \\
-    --place "Gulf Islands" \\
+    --place "Grayton Beach Florida" \\
     --date 2026-04-28 \\
-    --lat 30.3960 --lng -86.2286 \\
+    --lat 30.3298 --lng -86.1650 \\
     --ebird-key YOUR_KEY
 """
 
@@ -84,11 +84,13 @@ BIRD_FAMILY_GROUP = {
 }
 
 BIRD_GROUP_ORDER = [
+    "Conservation Concern",
     "Shorebirds", "Waterbirds", "Wading Birds", "Raptors",
     "Swallows", "Warblers", "Sparrows", "Songbirds",
 ]
 
 BIRD_GROUP_COLORS = {
+    "Conservation Concern": "#B8860B",
     "Shorebirds": "#8B7348",
     "Waterbirds": "#2E6B94",
     "Wading Birds": "#3A7D50",
@@ -101,9 +103,10 @@ BIRD_GROUP_COLORS = {
 
 # ── Plant group helpers ────────────────────────────────────────────────
 
-PLANT_GROUP_ORDER = ["Wildflowers & Herbs", "Ferns", "Shrubs", "Trees", "Vines"]
+PLANT_GROUP_ORDER = ["Conservation Concern", "Wildflowers & Herbs", "Ferns", "Shrubs", "Trees", "Vines"]
 
 PLANT_GROUP_COLORS = {
+    "Conservation Concern": "#B8860B",
     "Wildflowers & Herbs": "#6a8e3f",
     "Ferns": "#3a7a5a",
     "Shrubs": "#8a6a3a",
@@ -155,6 +158,34 @@ def safe_filename(name: str) -> str:
     return re.sub(r'[<>:"/\\|?*]', "_", name).strip()
 
 
+_TITLE_CASE_LOWER = {"a", "an", "and", "as", "at", "but", "by", "for", "in",
+                      "nor", "of", "on", "or", "so", "the", "to", "up", "yet"}
+
+
+def title_case_common_name(name: str) -> str:
+    """Title-case a common name, keeping articles/prepositions lowercase
+    except at the start. Handles hyphens and apostrophes correctly."""
+    if not name:
+        return name
+    words = name.split()
+    result = []
+    for i, word in enumerate(words):
+        if "-" in word:
+            parts = word.split("-")
+            parts = [p[:1].upper() + p[1:] if p else p for p in parts]
+            word = "-".join(parts)
+            result.append(word)
+        elif i == 0:
+            result.append(word[:1].upper() + word[1:])
+        elif word.lower() in _TITLE_CASE_LOWER:
+            result.append(word.lower())
+        elif "'" in word:
+            result.append(word[:1].upper() + word[1:])
+        else:
+            result.append(word[:1].upper() + word[1:])
+    return " ".join(result)
+
+
 def esc(text: str) -> str:
     return (
         text.replace("&", "&amp;")
@@ -163,6 +194,11 @@ def esc(text: str) -> str:
         .replace('"', "&quot;")
         .replace("'", "&#x27;")
     )
+
+
+def esc_img_path(path: str) -> str:
+    """Encode a local image path for use in HTML/CSS url(), handling apostrophes."""
+    return path.replace("'", "%27").replace("&", "&amp;").replace('"', "%22")
 
 
 def download_image(url: str, dest: Path, retries: int = 3) -> bool:
@@ -750,8 +786,91 @@ def scrape_wikipedia(sci_name: str, sentences: int = 5) -> dict:
     return info
 
 
+NOAA_COOPS_API = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
+
+# Nearest tide stations by region
+TIDE_STATIONS = {
+    "grayton_beach": {"id": "8729511", "name": "Destin, East Pass, FL"},
+    "panama_city": {"id": "8729210", "name": "Panama City Beach, FL"},
+    "pensacola": {"id": "8729840", "name": "Pensacola, FL"},
+}
+
+# Apalachicola NERR bounding box (USGS OF 2006-1381)
+ANERR_BBOX = "29.586522,-85.385000,29.867725,-84.572274"
+
+
+def fetch_noaa_tides(station_id: str, begin_date: str, end_date: str) -> list[dict]:
+    """Fetch hi/lo tide predictions from NOAA CO-OPS API.
+
+    Returns list of dicts with keys: t (datetime string), v (height ft), type (H/L).
+    """
+    try:
+        r = requests.get(
+            NOAA_COOPS_API,
+            params={
+                "station": station_id,
+                "product": "predictions",
+                "datum": "MLLW",
+                "begin_date": begin_date,
+                "end_date": end_date,
+                "interval": "hilo",
+                "time_zone": "lst_ldt",
+                "units": "english",
+                "format": "json",
+                "application": "FieldChecklist",
+            },
+            headers=HEADERS,
+            timeout=30,
+        )
+        r.raise_for_status()
+        return r.json().get("predictions", [])
+    except Exception as exc:
+        log.warning("NOAA tide fetch failed: %s", exc)
+        return []
+
+
+def format_tide_html(predictions: list[dict], station_name: str) -> str:
+    """Build an HTML tide table from NOAA predictions."""
+    if not predictions:
+        return ""
+    rows = []
+    current_date = ""
+    for p in predictions:
+        dt_str = p.get("t", "")
+        height = p.get("v", "")
+        tide_type = p.get("type", "")
+        date_part = dt_str.split(" ")[0] if " " in dt_str else dt_str
+        time_part = dt_str.split(" ")[1] if " " in dt_str else ""
+        type_label = "High" if tide_type == "H" else "Low"
+        type_color = "#2E6B94" if tide_type == "H" else "#8B7348"
+
+        date_cell = ""
+        if date_part != current_date:
+            current_date = date_part
+            date_cell = f'<td style="font-weight:600;padding:3px 8px;border-top:1px solid #eee">{date_part}</td>'
+        else:
+            date_cell = '<td style="padding:3px 8px"></td>'
+
+        rows.append(
+            f'<tr>{date_cell}'
+            f'<td style="padding:3px 8px">{time_part}</td>'
+            f'<td style="padding:3px 8px;color:{type_color};font-weight:500">{type_label}</td>'
+            f'<td style="padding:3px 8px;text-align:right">{height} ft</td></tr>'
+        )
+
+    return (
+        f'<div class="tide-table" style="margin:12px 0">'
+        f'<div style="font-size:12px;font-weight:600;margin-bottom:6px">'
+        f'Tide Predictions &middot; {esc(station_name)}</div>'
+        f'<table style="font-size:11px;border-collapse:collapse;width:100%">'
+        f'{"".join(rows)}</table>'
+        f'<div style="font-size:9px;color:#999;margin-top:4px">'
+        f'Source: NOAA Tides &amp; Currents (CO-OPS)</div></div>'
+    )
+
+
 PLANT_REFERENCE_ATTRIBUTION = (
-    "Compiled from Go Botany / Native Plant Trust, USDA PLANTS Database & "
+    "Go Botany / Native Plant Trust, USDA PLANTS Database & "
     "National Wetland Plant List, Missouri Botanical Garden Plant Finder, "
     "Wikipedia, Flora Novae Angliae (Haines), Dirr\u2019s Manual of Woody "
     "Landscape Plants, Florida Natural Heritage Program, NatureServe"
@@ -759,6 +878,20 @@ PLANT_REFERENCE_ATTRIBUTION = (
 
 
 # ── Bird pipeline ──────────────────────────────────────────────────────
+
+_CONSERVATION_ELEVATED_KW = {"orange", "tipping", "yellow", "watch", "decline",
+                             "endangered", "threatened", "vulnerable", "critical"}
+
+
+def is_conservation_elevated(text: str) -> bool:
+    """Return True if conservation text indicates elevated concern."""
+    if not text:
+        return False
+    t = text.lower()
+    if "low concern" in t:
+        return False
+    return any(kw in t for kw in _CONSERVATION_ELEVATED_KW)
+
 
 def assign_bird_group(order: str, family: str) -> str:
     if family in BIRD_FAMILY_GROUP:
@@ -817,6 +950,8 @@ def run_birds(cfg: dict) -> list[dict]:
             time.sleep(0.5)
 
         group = assign_bird_group(info.get("order", ""), info.get("family", ""))
+        if is_conservation_elevated(info.get("conservation", "")):
+            group = "Conservation Concern"
         birds.append({**sp, **info, "group": group})
 
         if info.get("asset_id"):
@@ -1129,6 +1264,8 @@ def run_plants(cfg: dict) -> list[dict]:
     for entry in species_list:
         inat_fam = inat_families.get(entry.get("taxon_id", 0), "")
         group = infer_plant_group(entry, entry.get("gobotany", {}), inat_fam)
+        if is_conservation_elevated(entry.get("conservation", "")):
+            group = "Conservation Concern"
         entry["group"] = group
 
     species_list.sort(key=lambda e: (
@@ -1369,7 +1506,7 @@ def conservation_badge_class(text: str) -> str:
 
 
 def build_bird_card(bird: dict, current_month_0: int, cfg: dict) -> str:
-    name = esc(bird.get("common_name", ""))
+    name = esc(title_case_common_name(bird.get("common_name", "")))
     sci = esc(bird.get("sci_name", ""))
     desc = esc(bird.get("description", ""))
     find = esc(bird.get("find_this_bird", ""))
@@ -1448,22 +1585,23 @@ def build_bird_card(bird: dict, current_month_0: int, cfg: dict) -> str:
 
 
 def build_plant_card(plant: dict, current_month_0: int, cfg: dict) -> str:
-    name = esc(plant.get("common_name", ""))
+    name = esc(title_case_common_name(plant.get("common_name", "")))
     sci = esc(plant.get("scientific_name", ""))
     desc = esc(plant.get("facts", ""))
     habitat = esc(plant.get("habitat", ""))
     family = esc(plant.get("family", ""))
+    conservation = plant.get("conservation", "")
     inat_count = plant.get("inat_count", 0)
 
     img1 = plant.get("image_1", "")
     img2 = plant.get("image_2", "")
 
     if img1:
-        layer1 = f'<div class="img-layer active" style="background-image:url(\'{esc(img1)}\')"></div>'
+        layer1 = f'<div class="img-layer active" style="background-image:url(\'{esc_img_path(img1)}\')"></div>'
     else:
         layer1 = '<div class="img-layer active" style="background:#ddd"></div>'
     if img2:
-        layer2 = f'<div class="img-layer" style="background-image:url(\'{esc(img2)}\')"></div>'
+        layer2 = f'<div class="img-layer" style="background-image:url(\'{esc_img_path(img2)}\')"></div>'
         flip_btn = '<button class="flip-btn" onclick="flipImg(this)">&#8644;</button>'
     else:
         layer2 = ""
@@ -1481,12 +1619,16 @@ def build_plant_card(plant: dict, current_month_0: int, cfg: dict) -> str:
     seas = plant.get("seasonality", [0] * 12)
     apr_may = 1 if (month_level(seas, 3) > 0 or month_level(seas, 4) > 0) else 0
 
+    badge_cls = conservation_badge_class(conservation) if conservation else ""
+    badge = f'<span class="conservation {badge_cls}">{esc(conservation)}</span>' if conservation else ""
+
     return f"""<div class="bird-card" data-apr-may="{apr_may}">
 <div class="card-image">{layer1}{layer2}{flip_btn}</div>
 <div class="card-body">
 <div class="card-top">
 <h3>{name}</h3>
 <span class="latin">{sci}</span>
+{badge}
 </div>
 {season_html}
 <div class="meta-row">{meta_tags}</div>
@@ -1592,9 +1734,11 @@ def generate_html(birds: list[dict], plants: list[dict], cfg: dict):
     if cfg.get("tides"):
         trip_items += f'<div class="trip-item"><strong>Tides</strong> {esc(cfg["tides"])}</div>'
 
+    tide_table = cfg.get("tide_html", "")
+
     trip_html = ""
-    if trip_items:
-        trip_html = f'<div class="trip-info"><div class="trip-grid">{trip_items}</div></div>'
+    if trip_items or tide_table:
+        trip_html = f'<div class="trip-info"><div class="trip-grid">{trip_items}</div>{tide_table}</div>'
 
     toggle_html = ""
     if has_both:
@@ -1632,7 +1776,7 @@ def generate_html(birds: list[dict], plants: list[dict], cfg: dict):
 <h1>{esc(cfg['place'])} Bird Checklist</h1>
 <div class="sub">{len(birds)} Species</div>
 <div class="location">{lat_str}, {lng_str}</div>
-<div class="locations">Sources: eBird, Cornell All About Birds, iNaturalist</div>
+<div class="locations">Sources: eBird, Cornell All About Birds, iNaturalist, Wikipedia, NOAA Tides &amp; Currents</div>
 </div>
 {filter_bar}
 {trip_html}
@@ -1724,13 +1868,53 @@ function initAprMay(){{
 function toggleAprMay(btn){{
   btn.classList.toggle('active');
   var on=btn.classList.contains('active');
-  document.querySelectorAll('.bird-card').forEach(function(card){{
+  var panel=btn.closest('.panel');
+  if(!panel)panel=document;
+  panel.querySelectorAll('.bird-card').forEach(function(card){{
     if(on && card.getAttribute('data-apr-may')==='0'){{
       card.classList.add('season-hidden');
     }} else {{
       card.classList.remove('season-hidden');
     }}
   }});
+  panel.querySelectorAll('.group-section').forEach(function(sec){{
+    var vis=sec.querySelectorAll('.bird-card:not(.season-hidden)').length;
+    var gc=sec.querySelector('.group-count');
+    if(gc)gc.textContent=vis+' species';
+  }});
+  panel.querySelectorAll('.season-bar').forEach(function(bar){{
+    var months=bar.querySelectorAll('.mo');
+    if(months.length>=5){{
+      var apr=months[3],may=months[4];
+      if(on){{
+        apr.classList.add('am-hl','am-hl-l');
+        may.classList.add('am-hl','am-hl-r');
+        apr.classList.remove('now');
+        may.classList.remove('now');
+      }} else {{
+        apr.classList.remove('am-hl','am-hl-l');
+        may.classList.remove('am-hl','am-hl-r');
+      }}
+    }}
+  }});
+  var total=panel.querySelectorAll('.bird-card:not(.season-hidden)').length;
+  var stat=document.getElementById('stat-text');
+  if(stat){{
+    var isBirds=panel.id==='panel-birds';
+    stat.textContent=total+(isBirds?' Bird Species':' Plant Species');
+  }}
+  var nav=document.getElementById(panel.id==='panel-birds'?'nav-birds':'nav-plants');
+  if(nav){{
+    nav.querySelectorAll('.nav-link').forEach(function(link){{
+      var href=link.getAttribute('href');
+      if(!href)return;
+      var sec=document.querySelector(href);
+      if(!sec)return;
+      var cnt=sec.querySelectorAll('.bird-card:not(.season-hidden)').length;
+      var nc=link.querySelector('.nav-count');
+      if(nc)nc.textContent=cnt;
+    }});
+  }}
 }}
 {switch_js}
 document.addEventListener('DOMContentLoaded',initAprMay);
@@ -1754,7 +1938,7 @@ Example:
   python3 field_checklist.py \\
     --place "Gulf Islands" \\
     --date 2026-04-28 \\
-    --lat 30.3960 --lng -86.2286 \\
+    --lat 30.3298 --lng -86.1650 \\
     --ebird-key YOUR_KEY
 """,
     )
@@ -1767,6 +1951,10 @@ Example:
                         help="eBird API key (or set EBIRD_API_KEY env var)")
     parser.add_argument("--moon", default="", help="Moon phase text for trip info")
     parser.add_argument("--tides", default="", help="Tide data text for trip info")
+    parser.add_argument("--tide-station", default="",
+                        help="NOAA station ID for auto tide fetch (e.g. 8729511)")
+    parser.add_argument("--tide-dates", default="",
+                        help="Tide date range YYYYMMDD,YYYYMMDD (e.g. 20260425,20260502)")
     parser.add_argument("--output", type=Path, default=None,
                         help="Output directory (default: output/<place-slug>)")
     parser.add_argument("--skip-images", action="store_true", help="Skip downloading images")
@@ -1818,6 +2006,20 @@ Example:
 
     if do_plants:
         plants = run_plants(cfg)
+
+    if args.tide_station and args.tide_dates:
+        parts = args.tide_dates.split(",")
+        if len(parts) == 2:
+            station_name = args.tide_station
+            for s in TIDE_STATIONS.values():
+                if s["id"] == args.tide_station:
+                    station_name = s["name"]
+                    break
+            log.info("\nFetching NOAA tide predictions (station %s)...", args.tide_station)
+            preds = fetch_noaa_tides(args.tide_station, parts[0], parts[1])
+            if preds:
+                cfg["tide_html"] = format_tide_html(preds, station_name)
+                log.info("  Got %d tide predictions", len(preds))
 
     log.info("\n" + "=" * 60)
     log.info("Generating combined HTML...")

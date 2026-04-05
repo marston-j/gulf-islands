@@ -15,9 +15,9 @@ Field checklist and interactive trail map for the Gulf Islands region (FL/AL Gul
 pip install -r requirements.txt
 
 python3 field_checklist.py \
-  --place "Gulf Islands" \
+  --place "Grayton Beach Florida" \
   --date 2026-04-28 \
-  --lat 30.3960 --lng -86.2286 \
+  --lat 30.3298 --lng -86.1650 \
   --ebird-key YOUR_KEY
 
 python3 trail_map.py \
@@ -25,6 +25,34 @@ python3 trail_map.py \
   --ebird-key YOUR_KEY \
   --target output/gulf-islands/index.html
 ```
+
+### Bbox Presets
+
+`trail_map.py` supports named bbox presets in place of coordinates:
+
+| Preset | Area | Bbox (S,W,N,E) |
+|--------|------|-----------------|
+| `gulf-panhandle` | Full FL/AL Gulf Panhandle | `29.5,-88.3,30.85,-84.0` |
+| `apalachicola-nerr` | Apalachicola NERR Estuary | `29.586522,-85.385000,29.867725,-84.572274` |
+| `grayton-beach` | Grayton Beach area | `30.25,-86.30,30.45,-86.05` |
+
+Example: `--bbox apalachicola-nerr`
+
+### Tide Predictions
+
+Auto-fetch NOAA tide predictions by adding station and date range:
+
+```bash
+python3 field_checklist.py \
+  --place "Grayton Beach Florida" \
+  --date 2026-04-28 \
+  --lat 30.3298 --lng -86.1650 \
+  --ebird-key YOUR_KEY \
+  --tide-station 8729511 \
+  --tide-dates 20260425,20260502
+```
+
+Known stations: Destin East Pass (`8729511`), Panama City Beach (`8729210`), Pensacola (`8729840`)
 
 Get a free eBird API key at https://ebird.org/api/keygen
 
@@ -40,13 +68,17 @@ output/gulf-islands/
 
 ## Data Sources
 
-**Birds**: eBird API, Cornell All About Birds, iNaturalist
+**Birds**: eBird API, Cornell All About Birds, iNaturalist, Wikipedia
 
 **Plants**: iNaturalist, Go Botany / Native Plant Trust, USDA PLANTS Database,
-Missouri Botanical Garden Plant Finder
+Missouri Botanical Garden Plant Finder, Wikipedia
 
 **Plant Reference Attribution**: Flora Novae Angliae (Haines), Dirr's Manual of
 Woody Landscape Plants, Florida Natural Heritage Program, NatureServe, National
 Wetland Plant List
 
-**Map**: OpenStreetMap, NPS National Register of Historic Places, eBird hotspots
+**Map**: OpenStreetMap (Overpass API), NPS National Register of Historic Places,
+eBird hotspots & observations, iNaturalist (rare species), Florida DEP Aquatic
+Preserves, NOAA National Estuarine Research Reserves
+
+**Tides**: NOAA Tides & Currents (CO-OPS API)

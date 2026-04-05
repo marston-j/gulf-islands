@@ -50,19 +50,27 @@ HEADERS = {"User-Agent": "TrailMapBuilder/1.0 (field-checklist)"}
 
 NPS_NRHP_API = "https://mapservices.nps.gov/arcgis/rest/services/cultural_resources/nrhp_locations/MapServer"
 
+# Preset bounding boxes for known regions
+BBOX_PRESETS = {
+    "gulf-panhandle": "29.5,-88.3,30.85,-84.0",
+    "apalachicola-nerr": "29.586522,-85.385000,29.867725,-84.572274",
+    "grayton-beach": "30.25,-86.30,30.45,-86.05",
+}
+
 LAYER_DEFS = {
     "hiking":      {"label": "Hiking Trails",       "color": "#D4820F", "on": True},
     "bike":        {"label": "Bike Routes",          "color": "#2E6B94", "on": True},
     "beaches_public":  {"label": "Public Beaches",      "color": "#27AE60", "on": False},
     "beaches_private": {"label": "Private / Restricted", "color": "#E74C3C", "on": False},
-    "beaches_veh_yes": {"label": "Vehicles Allowed",     "color": "#2980B9", "on": False},
-    "beaches_veh_no":  {"label": "No Vehicles",          "color": "#BDC3C7", "on": False},
     "state_parks": {"label": "State Parks",          "color": "#3A7D50", "on": True},
     "wilderness":  {"label": "Wilderness Areas",     "color": "#4A6A3A", "on": False},
     "refuges":     {"label": "Wildlife Refuges",     "color": "#2A7A7A", "on": False},
     "forests":     {"label": "State / Nat'l Forests", "color": "#2D5A1E", "on": False},
     "lighthouses": {"label": "Lighthouses",          "color": "#C0392B", "on": True},
     "heritage":    {"label": "Heritage Sites",       "color": "#7A5230", "on": True},
+    "aquatic_preserves": {"label": "Aquatic Preserves", "color": "#0077B6", "on": False},
+    "nerrs":       {"label": "Estuarine Reserves",   "color": "#005F73", "on": False},
+    "inat_rare":   {"label": "Rare Species (iNat)",  "color": "#D4380D", "on": False},
     "hotspots":    {"label": "Birding Hotspots",     "color": "#8B4513", "on": True},
     "ebird_obs":   {"label": "eBird Obs (30 d)",     "color": "#1A6B3A", "on": False},
 }
@@ -480,6 +488,91 @@ def fetch_heritage(bbox, cache):
     return {"type": "FeatureCollection", "features": merged}
 
 
+# ─── Ecological layers ─────────────────────────────────────────────
+
+def fetch_aquatic_preserves(bbox, cache):
+    """Fetch aquatic preserve boundaries from OSM."""
+    bb = bbox_ql(bbox)
+    q = (
+        f"[out:json][timeout:300];\n"
+        f"(\n"
+        f'  relation["boundary"="protected_area"]["name"~"Aquatic Preserve",i]({bb});\n'
+        f'  way["boundary"="protected_area"]["name"~"Aquatic Preserve",i]({bb});\n'
+        f");\nout body;\n>;\nout skel qt;"
+    )
+    return _osm_geojson(q, cache, "aquatic_preserves_v1",
+                        ["name", "protect_class", "protection_title"])
+
+
+def fetch_nerrs(bbox, cache):
+    """Fetch National Estuarine Research Reserve boundaries from OSM."""
+    bb = bbox_ql(bbox)
+    q = (
+        f"[out:json][timeout:300];\n"
+        f"(\n"
+        f'  relation["boundary"="protected_area"]["name"~"Estuarine Research Reserve|NERR",i]({bb});\n'
+        f'  way["boundary"="protected_area"]["name"~"Estuarine Research Reserve|NERR",i]({bb});\n'
+        f'  relation["name"~"Apalachicola.*Reserve",i]({bb});\n'
+        f");\nout body;\n>;\nout skel qt;"
+    )
+    return _osm_geojson(q, cache, "nerrs_v1",
+                        ["name", "protect_class", "protection_title"])
+
+
+INAT_API_URL = "https://api.inaturalist.org/v1"
+
+
+def fetch_inat_rare(bbox, cache):
+    """Fetch threatened/rare species observations from iNaturalist."""
+    ck = "inat_rare_v1"
+    if ck in cache:
+        log.info("    [cached] iNat rare species")
+        return cache[ck]
+
+    s, w, n, e = bbox
+    features = []
+    try:
+        r = requests.get(
+            f"{INAT_API_URL}/observations",
+            params={
+                "nelat": n, "nelng": e, "swlat": s, "swlng": w,
+                "threatened": "true", "quality_grade": "research",
+                "per_page": 200, "order": "desc", "order_by": "observed_on",
+            },
+            headers=HEADERS,
+            timeout=120,
+        )
+        r.raise_for_status()
+        for obs in r.json().get("results", []):
+            taxon = obs.get("taxon") or {}
+            loc = obs.get("location")
+            if not loc or not taxon.get("name"):
+                continue
+            lat_s, lng_s = loc.split(",")
+            cs = taxon.get("conservation_status") or {}
+            features.append({
+                "type": "Feature",
+                "properties": {
+                    "name": taxon.get("preferred_common_name", taxon["name"]),
+                    "sciName": taxon["name"],
+                    "status": cs.get("status_name", ""),
+                    "iucn": cs.get("iucn", ""),
+                    "observedOn": obs.get("observed_on", ""),
+                    "uri": obs.get("uri", ""),
+                },
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [round(float(lng_s), 5), round(float(lat_s), 5)],
+                },
+            })
+    except Exception as exc:
+        log.warning("    iNat rare species query failed: %s", exc)
+
+    gj = {"type": "FeatureCollection", "features": features}
+    cache[ck] = gj
+    return gj
+
+
 # ─── eBird API ────────────────────────────────────────────────────
 
 def fetch_hotspots(bbox, api_key, cache):
@@ -580,10 +673,16 @@ def fetch_ebird_obs(bbox, api_key, back, cache):
                 "species": sp,
                 "sciName": obs.get("sciName", ""),
                 "howMany": obs.get("howMany") or 1,
+                "obsDt": obs.get("obsDt", ""),
+                "subId": obs.get("subId", ""),
             }
         else:
             prev = entry["species"][sp_key]
             prev["howMany"] = max(prev["howMany"], obs.get("howMany") or 1)
+            if obs.get("obsDt", "") > prev.get("obsDt", ""):
+                prev["obsDt"] = obs["obsDt"]
+                if obs.get("subId"):
+                    prev["subId"] = obs["subId"]
 
     features = []
     for loc_id, rec in loc_agg.items():
@@ -593,6 +692,7 @@ def fetch_ebird_obs(bbox, api_key, back, cache):
             "properties": {
                 "locName": rec["locName"],
                 "latestDate": rec["latestDate"],
+                "locId": loc_id,
                 "species_list": sp_list,
             },
             "geometry": {
@@ -607,6 +707,7 @@ def fetch_ebird_obs(bbox, api_key, back, cache):
 
 MAP_CSS = """
 #leaflet-map{height:calc(100vh - 20px);width:100%;z-index:1}
+.panel:not(.active){display:none!important;overflow:hidden;height:0}
 .map-layer-toggle{display:flex;align-items:center;gap:8px;padding:5px 16px;font-size:12px;cursor:pointer;user-select:none}
 .map-layer-toggle:hover{background:rgba(0,0,0,.04)}
 .map-layer-toggle input[type=checkbox]{margin:0;accent-color:var(--accent)}
@@ -665,16 +766,10 @@ function initMap(){
   }
   _mapLayers.beaches_public=L.geoJSON(mapData_beaches,{
     filter:function(f){var a=f.properties.access;return !a||a==='yes'||a==='public';},
-    style:beachStyle('#2196F3'),onEachFeature:beachPopup,pointToLayer:cm('#2196F3',6)});
+    style:beachStyle('__CLR_BEACHES_PUBLIC__'),onEachFeature:beachPopup,pointToLayer:cm('__CLR_BEACHES_PUBLIC__',6)});
   _mapLayers.beaches_private=L.geoJSON(mapData_beaches,{
     filter:function(f){var a=f.properties.access;return a==='private'||a==='no';},
-    style:beachStyle('#FF5722'),onEachFeature:beachPopup,pointToLayer:cm('#FF5722',6)});
-  _mapLayers.beaches_veh_yes=L.geoJSON(mapData_beaches,{
-    filter:function(f){return f.properties.vehicles==='yes';},
-    style:beachStyle('#4CAF50'),onEachFeature:beachPopup,pointToLayer:cm('#4CAF50',6)});
-  _mapLayers.beaches_veh_no=L.geoJSON(mapData_beaches,{
-    filter:function(f){return f.properties.vehicles==='no';},
-    style:beachStyle('#9C27B0'),onEachFeature:beachPopup,pointToLayer:cm('#9C27B0',6)});
+    style:beachStyle('__CLR_BEACHES_PRIVATE__'),onEachFeature:beachPopup,pointToLayer:cm('__CLR_BEACHES_PRIVATE__',6)});
 
   _mapLayers.state_parks=L.geoJSON(mapData_state_parks,{style:ps('#3A7D50')});
   bp(_mapLayers.state_parks,function(p){return '<b>'+(p.name||'State Park')+'</b>'+(p.protection_title?'<br>'+p.protection_title:'');});
@@ -743,6 +838,17 @@ function initMap(){
     }
   });
 
+  _mapLayers.aquatic_preserves=L.geoJSON(mapData_aquatic_preserves,{style:ps('#0077B6','6 3')});
+  bp(_mapLayers.aquatic_preserves,function(p){return '<b>'+(p.name||'Aquatic Preserve')+'</b>'+(p.protection_title?'<br>'+p.protection_title:'');});
+
+  _mapLayers.nerrs=L.geoJSON(mapData_nerrs,{style:ps('#005F73','4 6')});
+  bp(_mapLayers.nerrs,function(p){return '<b>'+(p.name||'Estuarine Reserve')+'</b>'+(p.protection_title?'<br>'+p.protection_title:'');});
+
+  _mapLayers.inat_rare=L.geoJSON(mapData_inat_rare,{
+    pointToLayer:function(f,ll){return L.circleMarker(ll,{radius:6,fillColor:'#D4380D',color:'#fff',weight:2,fillOpacity:.9});}
+  });
+  bp(_mapLayers.inat_rare,function(p){var s='<b>'+(p.name||p.sciName)+'</b>';if(p.sciName)s+='<br><i style="color:#666">'+p.sciName+'</i>';if(p.status)s+='<br><span style="color:#D4380D;font-weight:600;font-size:11px">'+p.status+'</span>';if(p.observedOn)s+='<br><span class="popup-meta">Observed: '+p.observedOn+'</span>';if(p.uri)s+='<br><a href="'+p.uri+'" target="_blank" style="font-size:11px">View on iNaturalist</a>';return s;});
+
   _mapLayers.hotspots=L.geoJSON(mapData_hotspots,{
     pointToLayer:function(f,ll){return L.circleMarker(ll,{radius:7,fillColor:'#8B4513',color:'#fff',weight:2,fillOpacity:.9});}
   });
@@ -757,15 +863,19 @@ function initMap(){
       var p=f.properties;
       if(p.species_list){
         var list=p.species_list;
-        var s='<div style="max-width:300px"><b>'+(p.locName||'Observation')+'</b><br><span style="font-size:11px;color:#555">'+list.length+' species \u00b7 Latest: '+(p.latestDate||'')+'</span><div style="max-height:200px;overflow-y:auto;margin-top:4px">';
+        var locLink=p.locId?'<a href="https://ebird.org/hotspot/'+p.locId+'" target="_blank" style="font-size:11px;color:#1A6B3A">View on eBird</a>':'';
+        var s='<div style="max-width:320px"><b>'+(p.locName||'Observation')+'</b><br><span style="font-size:11px;color:#555">'+list.length+' species \u00b7 Latest: '+(p.latestDate||'')+'</span>';
+        if(locLink)s+=' \u00b7 '+locLink;
+        s+='<div style="max-height:220px;overflow-y:auto;margin-top:4px">';
         var show=Math.min(list.length,12);
         for(var i=0;i<show;i++){
           var sp=list[i];
-          s+='<div style="font-size:11px;padding:1px 0;border-bottom:1px solid #eee"><span class="popup-species">'+sp.species+'</span>'+(sp.howMany>1?' ('+sp.howMany+')':'')+'</div>';
+          var spName=sp.subId?'<a href="https://ebird.org/checklist/'+sp.subId+'" target="_blank" class="popup-species" style="text-decoration:none">'+sp.species+'</a>':'<span class="popup-species">'+sp.species+'</span>';
+          s+='<div style="font-size:11px;padding:2px 0;border-bottom:1px solid #eee">'+spName+' <i style="color:#888">'+sp.sciName+'</i>'+(sp.howMany>1?' ('+sp.howMany+')':'')+(sp.obsDt?'<span style="float:right;color:#999;font-size:10px">'+sp.obsDt.split(' ')[0]+'</span>':'')+'</div>';
         }
         if(list.length>12)s+='<div style="font-size:11px;color:#888;padding:2px 0">+ '+(list.length-12)+' more species</div>';
         s+='</div></div>';
-        layer.bindPopup(s,{maxWidth:320,maxHeight:300});
+        layer.bindPopup(s,{maxWidth:340,maxHeight:320});
       } else {
         layer.bindPopup('<span class="popup-species">'+(p.species||'')+'</span><br><i>'+(p.sciName||'')+'</i><br><span class="popup-meta">'+(p.locName||'')+'<br>'+(p.obsDt||'')+'</span>');
       }
@@ -790,7 +900,7 @@ function switchMode(mode){
     var p=document.getElementById('panel-'+m);
     var n=document.getElementById('nav-'+m);
     var b=document.getElementById('btn-'+m);
-    if(p)p.classList.toggle('active',m===mode);
+    if(p){p.classList.toggle('active',m===mode);p.style.display=m===mode?'block':'none';}
     if(n)n.style.display=m===mode?'':'none';
     if(b)b.classList.toggle('active',m===mode);
   });
@@ -814,8 +924,6 @@ def build_parts(layers: dict, bbox: tuple) -> dict:
     beach_counts = {
         "beaches_public": _beach_count(lambda p: p.get("access", "") in ("", "yes", "public")),
         "beaches_private": _beach_count(lambda p: p.get("access", "") in ("private", "no")),
-        "beaches_veh_yes": _beach_count(lambda p: p.get("vehicles", "") == "yes"),
-        "beaches_veh_no": _beach_count(lambda p: p.get("vehicles", "") == "no"),
     }
 
     nav_items = []
@@ -839,7 +947,14 @@ def build_parts(layers: dict, bbox: tuple) -> dict:
         + "\n</div>"
     )
 
-    panel_html = '<div class="panel" id="panel-map"><div id="leaflet-map"></div></div>'
+    panel_html = (
+        '<div class="panel" id="panel-map"><div id="leaflet-map"></div>'
+        '<div style="padding:8px 16px;font-size:9px;color:#999;line-height:1.6">'
+        'Map data: OpenStreetMap, NPS National Register of Historic Places, '
+        'eBird (Cornell Lab of Ornithology), iNaturalist, '
+        'Florida DEP Aquatic Preserves, NOAA NERR. '
+        'Tiles: CartoDB, OpenTopoMap, Esri World Imagery.</div></div>'
+    )
 
     data_keys = set()
     for key in LAYER_DEFS:
@@ -864,6 +979,8 @@ def build_parts(layers: dict, bbox: tuple) -> dict:
         .replace("__NORTH__", str(n))
         .replace("__EAST__", str(e))
         .replace("__DEFAULTS_OBJ__", defaults_obj)
+        .replace("__CLR_BEACHES_PUBLIC__", LAYER_DEFS["beaches_public"]["color"])
+        .replace("__CLR_BEACHES_PRIVATE__", LAYER_DEFS["beaches_private"]["color"])
     )
 
     return {
@@ -916,6 +1033,17 @@ def inject_map_tab(target: Path, parts: dict):
 
     html = html.replace("</main>", parts["panel_html"] + "\n</main>", 1)
 
+    preserved_js = ""
+    m = re.search(r"(function initAprMay\b.*?function toggleAprMay\b.*?^\})",
+                  html, re.DOTALL | re.MULTILINE)
+    if m:
+        preserved_js = m.group(0)
+    if not preserved_js:
+        m2 = re.search(r"(function initAprMay\(.*?(?=function switchMode|document\.addEventListener|</))",
+                       html, re.DOTALL)
+        if m2:
+            preserved_js = m2.group(1)
+
     new_script = (
         "<script>\n"
         + parts["data_script"] + "\n"
@@ -926,8 +1054,10 @@ def inject_map_tab(target: Path, parts: dict):
         "  layers[0].classList.toggle('active');\n"
         "  layers[1].classList.toggle('active');\n"
         "}\n"
+        + preserved_js + "\n"
         + switch_js + "\n"
         + parts["init_js"] + "\n"
+        + "\ndocument.addEventListener('DOMContentLoaded',initAprMay);\n"
         + "</script>"
     )
     html = re.sub(
@@ -961,7 +1091,8 @@ def main():
                         help="Cache directory (default: target parent)")
     args = parser.parse_args()
 
-    bbox = parse_bbox(args.bbox)
+    bbox_str = BBOX_PRESETS.get(args.bbox, args.bbox)
+    bbox = parse_bbox(bbox_str)
     target = args.target.resolve()
     if not target.exists():
         parser.error(f"Target not found: {target}")
@@ -981,15 +1112,18 @@ def main():
     layers = {}
 
     fetchers = [
-        ("hiking",      fetch_hiking,      "Hiking trails"),
-        ("bike",        fetch_bike,        "Bike routes"),
-        ("beaches",     fetch_beaches,     "Beaches"),
-        ("state_parks", fetch_state_parks, "State parks"),
-        ("wilderness",  fetch_wilderness,  "Wilderness areas"),
-        ("refuges",     fetch_refuges,     "Wildlife refuges"),
-        ("forests",     fetch_forests,     "State/nat'l forests"),
-        ("lighthouses", fetch_lighthouses, "Lighthouses"),
-        ("heritage",    fetch_heritage,    "Heritage sites"),
+        ("hiking",            fetch_hiking,            "Hiking trails"),
+        ("bike",              fetch_bike,              "Bike routes"),
+        ("beaches",           fetch_beaches,           "Beaches"),
+        ("state_parks",       fetch_state_parks,       "State parks"),
+        ("wilderness",        fetch_wilderness,        "Wilderness areas"),
+        ("refuges",           fetch_refuges,           "Wildlife refuges"),
+        ("forests",           fetch_forests,            "State/nat'l forests"),
+        ("lighthouses",       fetch_lighthouses,       "Lighthouses"),
+        ("heritage",          fetch_heritage,          "Heritage sites"),
+        ("aquatic_preserves", fetch_aquatic_preserves, "Aquatic preserves"),
+        ("nerrs",             fetch_nerrs,             "Estuarine reserves"),
+        ("inat_rare",         fetch_inat_rare,         "Rare species (iNat)"),
     ]
     total_osm = len(fetchers)
     for i, (key, fn, label) in enumerate(fetchers, 1):
