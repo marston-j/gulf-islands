@@ -103,15 +103,38 @@ BIRD_GROUP_COLORS = {
 
 # ── Plant group helpers ────────────────────────────────────────────────
 
-PLANT_GROUP_ORDER = ["Conservation Concern", "Wildflowers & Herbs", "Ferns", "Shrubs", "Trees", "Vines"]
+PLANT_GROUP_ORDER = ["Conservation Concern", "Wildflowers & Herbs", "Ferns", "Lichens & Mosses", "Shrubs", "Trees", "Vines"]
 
 PLANT_GROUP_COLORS = {
     "Conservation Concern": "#B8860B",
     "Wildflowers & Herbs": "#6a8e3f",
     "Ferns": "#3a7a5a",
+    "Lichens & Mosses": "#7a9a7a",
     "Shrubs": "#8a6a3a",
     "Trees": "#5a6a3a",
     "Vines": "#7a5a6a",
+}
+
+SEA_LIFE_GROUP_ORDER = ["Fish", "Mollusks", "Crustaceans", "Jellyfish & Corals", "Echinoderms", "Marine Reptiles", "Marine Mammals"]
+
+SEA_LIFE_GROUP_COLORS = {
+    "Fish": "#2E6B94",
+    "Mollusks": "#8B7348",
+    "Crustaceans": "#B85C38",
+    "Jellyfish & Corals": "#7B5EA7",
+    "Echinoderms": "#5A8A6A",
+    "Marine Reptiles": "#6B7820",
+    "Marine Mammals": "#505060",
+}
+
+SEA_LIFE_TAXON_IDS = {
+    47178: "Fish",
+    47115: "Mollusks",
+    85493: "Crustaceans",
+    47534: "Jellyfish & Corals",
+    47549: "Echinoderms",
+    73863: "Marine Reptiles",
+    40151: "Marine Mammals",
 }
 
 TREE_FAMILIES = {
@@ -135,7 +158,23 @@ SHRUB_FAMILIES = {
 
 VINE_FAMILIES = {"Vitaceae", "Smilacaceae", "Menispermaceae", "Convolvulaceae"}
 
+TREE_SUBGROUPS = {
+    "Arecaceae": "Palms",
+    "Fagaceae": "Oaks",
+    "Pinaceae": "Pines & Conifers",
+    "Cupressaceae": "Pines & Conifers",
+    "Taxaceae": "Pines & Conifers",
+    "Taxodiaceae": "Pines & Conifers",
+    "Podocarpaceae": "Pines & Conifers",
+    "Magnoliaceae": "Magnolias",
+    "Annonaceae": "Magnolias",
+}
+TREE_SUBGROUP_ORDER = ["Palms", "Oaks", "Pines & Conifers", "Magnolias", "Other Broadleaf"]
+
 FERN_ANCESTOR_ID = 121943  # Polypodiopsida
+LICHEN_ANCESTOR_ID = 54743  # Lecanoromycetes (lichenized fungi)
+BRYOPHYTE_ANCESTOR_ID = 311295  # Bryophyta (mosses)
+FUNGI_ANCESTOR_ID = 47170  # Fungi
 
 logging.basicConfig(
     level=logging.INFO,
@@ -449,8 +488,6 @@ def inat_species_for_month(taxon_id: int, lat: float, lng: float,
             if rank not in ("species", "subspecies", "variety"):
                 continue
             ancestor_ids = set(taxon.get("ancestor_ids", []))
-            if 311249 in ancestor_ids or 311295 in ancestor_ids:
-                continue
             results_map[sci] = {
                 "count": r["count"],
                 "taxon_id": taxon["id"],
@@ -790,7 +827,7 @@ NOAA_COOPS_API = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
 
 # Nearest tide stations by region
 TIDE_STATIONS = {
-    "grayton_beach": {"id": "8729511", "name": "Destin, East Pass, FL"},
+    "grayton_beach": {"id": "8729511", "name": "Destin East Pass (nearest to Grayton Beach)"},
     "panama_city": {"id": "8729210", "name": "Panama City Beach, FL"},
     "pensacola": {"id": "8729840", "name": "Pensacola, FL"},
 }
@@ -830,7 +867,7 @@ def fetch_noaa_tides(station_id: str, begin_date: str, end_date: str) -> list[di
 
 
 def format_tide_html(predictions: list[dict], station_name: str) -> str:
-    """Build an inline SVG tide trendline from NOAA predictions."""
+    """Build an inline SVG tide trendline with smooth cubic curves."""
     if not predictions:
         return ""
 
@@ -873,10 +910,29 @@ def format_tide_html(predictions: list[dict], station_name: str) -> str:
     def sy(v: float) -> float:
         return PAD_TOP + (1 - (v - min_v) / v_range) * (H - PAD_TOP - PAD_BOT)
 
-    path_d = " ".join(
-        f"{'M' if i == 0 else 'L'}{sx(h):.1f},{sy(v):.1f}"
-        for i, (h, v) in enumerate(points)
-    )
+    px = [sx(h) for h, _ in points]
+    py = [sy(v) for _, v in points]
+    n = len(px)
+
+    segs = [f"M{px[0]:.1f},{py[0]:.1f}"]
+    for i in range(1, n):
+        t = 0.35
+        if i == 1:
+            cp1x = px[0] + t * (px[1] - px[0])
+            cp1y = py[0] + t * (py[1] - py[0])
+        else:
+            cp1x = px[i - 1] + t * (px[i] - px[i - 2])
+            cp1y = py[i - 1] + t * (py[i] - py[i - 2])
+        if i == n - 1:
+            cp2x = px[i] - t * (px[i] - px[i - 1])
+            cp2y = py[i] - t * (py[i] - py[i - 1])
+        else:
+            cp2x = px[i] - t * (px[i + 1] - px[i - 1])
+            cp2y = py[i] - t * (py[i + 1] - py[i - 1])
+        segs.append(f"C{cp1x:.1f},{cp1y:.1f} {cp2x:.1f},{cp2y:.1f} {px[i]:.1f},{py[i]:.1f}")
+    path_d = " ".join(segs)
+
+    fill_d = path_d + f" L{px[-1]:.1f},{H - PAD_BOT:.1f} L{px[0]:.1f},{H - PAD_BOT:.1f} Z"
 
     day_marks = []
     seen_dates: set[str] = set()
@@ -895,12 +951,11 @@ def format_tide_html(predictions: list[dict], station_name: str) -> str:
     for lb in labels:
         x, y = sx(lb["h"]), sy(lb["v"])
         color = "#2E6B94" if lb["type"] == "H" else "#8B7348"
-        anchor = "middle"
         tip = f'{lb["time"]} {lb["v"]:.1f}ft'
         ty = y - 5 if lb["type"] == "H" else y + 9
         dots.append(
             f'<circle cx="{x:.1f}" cy="{y:.1f}" r="2" fill="{color}"/>'
-            f'<text x="{x:.1f}" y="{ty:.1f}" text-anchor="{anchor}" '
+            f'<text x="{x:.1f}" y="{ty:.1f}" text-anchor="middle" '
             f'font-size="6.5" fill="{color}">{tip}</text>'
         )
 
@@ -908,6 +963,7 @@ def format_tide_html(predictions: list[dict], station_name: str) -> str:
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" '
         f'style="width:100%;max-width:{W}px;height:auto;display:block">'
         f'{"".join(day_marks)}'
+        f'<path d="{fill_d}" fill="rgba(90,158,192,0.08)" stroke="none"/>'
         f'<path d="{path_d}" fill="none" stroke="#5a9ec0" stroke-width="1.5" '
         f'stroke-linejoin="round" stroke-linecap="round"/>'
         f'{"".join(dots)}'
@@ -921,6 +977,82 @@ def format_tide_html(predictions: list[dict], station_name: str) -> str:
         f'{svg}'
         f'<div style="font-size:8px;color:#bbb;margin-top:2px">'
         f'NOAA CO-OPS &middot; MLLW datum</div></div>'
+    )
+
+
+def compute_moon_phases(start_date: str, end_date: str) -> str:
+    """Compute moon phases for date range and return inline SVG icons."""
+    from datetime import datetime, timedelta
+    import math
+
+    def moon_phase(year, month, day):
+        if month <= 2:
+            year -= 1
+            month += 12
+        a = year // 100
+        b = 2 - a + a // 4
+        jd = int(365.25 * (year + 4716)) + int(30.6001 * (month + 1)) + day + b - 1524.5
+        days_since = jd - 2451550.1
+        lunations = days_since / 29.530588853
+        phase = lunations - int(lunations)
+        if phase < 0:
+            phase += 1
+        return phase
+
+    try:
+        d0 = datetime.strptime(start_date, "%Y%m%d")
+        d1 = datetime.strptime(end_date, "%Y%m%d")
+    except ValueError:
+        return ""
+
+    icons = []
+    d = d0
+    while d <= d1:
+        p = moon_phase(d.year, d.month, d.day)
+        illum = 0.5 * (1 - math.cos(2 * math.pi * p))
+        lbl = d.strftime("%b %d")
+
+        r = 8
+        cx, cy = 10, 10
+        if illum < 0.02:
+            phase_name = "New"
+            moon_svg = (f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="#333" stroke="#666" stroke-width="0.5"/>')
+        elif illum > 0.98:
+            phase_name = "Full"
+            moon_svg = (f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="#F5E6B8" stroke="#ccc" stroke-width="0.5"/>')
+        else:
+            waning = p > 0.5
+            f_val = abs(2 * illum - 1)
+            sweep_outer = "0" if waning else "1"
+            dx = r * f_val
+            if illum < 0.5:
+                sweep_inner = "1" if waning else "0"
+            else:
+                sweep_inner = "0" if waning else "1"
+            moon_svg = (
+                f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="#F5E6B8" stroke="#ccc" stroke-width="0.5"/>'
+                f'<path d="M{cx},{cy - r} '
+                f'A{r},{r} 0 0,{sweep_outer} {cx},{cy + r} '
+                f'A{dx:.1f},{r} 0 0,{sweep_inner} {cx},{cy - r}" fill="#333"/>'
+            )
+            phase_name = ""
+
+        icons.append(
+            f'<div style="text-align:center;flex-shrink:0">'
+            f'<svg width="20" height="20" viewBox="0 0 20 20">{moon_svg}</svg>'
+            f'<div style="font-size:7px;color:#999;margin-top:1px">{lbl}</div>'
+            f'</div>'
+        )
+        d += timedelta(days=1)
+
+    if not icons:
+        return ""
+    return (
+        '<div style="margin:10px 0;max-width:520px">'
+        '<div style="font-size:11px;font-weight:600;margin-bottom:4px;color:#555">Moon Phases</div>'
+        '<div style="display:flex;gap:6px;flex-wrap:wrap">'
+        + "".join(icons)
+        + '</div></div>'
     )
 
 
@@ -1108,6 +1240,13 @@ def infer_plant_group(taxon_info: dict, gobotany_info: dict,
                       inat_family: str = "") -> str:
     """Classify a plant into a display group."""
     ancestor_ids = set(taxon_info.get("ancestor_ids", []))
+    iconic = taxon_info.get("iconic_taxon_name", "")
+    if BRYOPHYTE_ANCESTOR_ID in ancestor_ids:
+        return "Lichens & Mosses"
+    if iconic == "Fungi" or FUNGI_ANCESTOR_ID in ancestor_ids:
+        if LICHEN_ANCESTOR_ID in ancestor_ids:
+            return "Lichens & Mosses"
+        return "Lichens & Mosses"
     if FERN_ANCESTOR_ID in ancestor_ids:
         return "Ferns"
 
@@ -1163,6 +1302,19 @@ def run_plants(cfg: dict) -> list[dict]:
         47126, cfg["lat"], cfg["lng"], cfg["radius"], months_str,
     )
     log.info("  Found %d native plant species", len(inat_data))
+
+    log.info("  Querying iNaturalist for lichens & mosses...")
+    lichen_data = inat_species_for_month(
+        47170, cfg["lat"], cfg["lng"], cfg["radius"], months_str,
+    )
+    lichen_count = 0
+    for sci, info in lichen_data.items():
+        if sci not in inat_data:
+            aids = set(info.get("ancestor_ids", []))
+            if 54743 in aids or 311295 in aids:
+                inat_data[sci] = info
+                lichen_count += 1
+    log.info("  Found %d lichens & mosses", lichen_count)
 
     species_list = []
     for sci, info in inat_data.items():
@@ -1316,6 +1468,58 @@ def run_plants(cfg: dict) -> list[dict]:
             if fam:
                 e["family"] = fam
 
+    log.info("\nStep 2d: Fetching Florida conservation status from iNaturalist...")
+    fl_statuses_fetched = 0
+    for i, entry in enumerate(species_list):
+        tid = entry.get("taxon_id")
+        if not tid:
+            continue
+        cache_key = f"fl_conservation_{tid}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            if cached:
+                entry["conservation"] = cached
+                fl_statuses_fetched += 1
+            continue
+        try:
+            r = requests.get(f"{INAT_API}/taxa/{tid}",
+                             headers=HEADERS, timeout=15)
+            if r.status_code == 200:
+                taxon_data = r.json().get("results", [{}])[0]
+                statuses = taxon_data.get("conservation_statuses", [])
+                fl_parts = []
+                for cs in statuses:
+                    place = cs.get("place", {})
+                    place_name = place.get("display_name", "") if place else ""
+                    if "Florida" in place_name or "United States" == place_name:
+                        status = cs.get("status", "").upper()
+                        status_name = cs.get("status_name", "")
+                        authority = cs.get("authority", "")
+                        grank = cs.get("grank", "")
+                        iucn = cs.get("iucn", "")
+                        parts = []
+                        if status_name:
+                            parts.append(status_name)
+                        elif status:
+                            parts.append(status)
+                        if grank:
+                            parts.append(f"G-rank: {grank}")
+                        if authority and "Florida" in authority:
+                            parts.append(authority)
+                        if parts:
+                            fl_parts.append(" · ".join(parts))
+                fl_text = "; ".join(fl_parts) if fl_parts else ""
+                cache[cache_key] = fl_text
+                save_json(plant_cache_path, cache)
+                if fl_text:
+                    entry["conservation"] = fl_text
+                    fl_statuses_fetched += 1
+            time.sleep(0.3)
+        except Exception:
+            cache[cache_key] = ""
+            save_json(plant_cache_path, cache)
+    log.info("  Found Florida status for %d species", fl_statuses_fetched)
+
     for entry in species_list:
         inat_fam = inat_families.get(entry.get("taxon_id", 0), "")
         group = infer_plant_group(entry, entry.get("gobotany", {}), inat_fam)
@@ -1435,6 +1639,169 @@ def run_plants(cfg: dict) -> list[dict]:
     log.info("  Wrote %s (%d species)", csv_path, len(records))
 
     return species_list
+
+
+def run_sea_life(cfg: dict) -> list[dict]:
+    """Run the sea life pipeline. Returns enriched marine species records."""
+    log.info("\n" + "=" * 60)
+    log.info("Sea Life Pipeline — %s", cfg["place"])
+    log.info("=" * 60)
+
+    out_dir = cfg["output_dir"] / "images" / "SeaLife"
+    seasonality_path = cfg["output_dir"] / ".seasonality.json"
+
+    target_month = cfg["date"].month
+    m_prev = ((target_month - 2) % 12) + 1
+    m_next = (target_month % 12) + 1
+    months_str = ",".join(str(m) for m in sorted({m_prev, target_month, m_next}))
+
+    seasonality = load_json(seasonality_path)
+    species_list = []
+
+    for taxon_id, group_name in SEA_LIFE_TAXON_IDS.items():
+        log.info("\nQuerying iNaturalist for %s (taxon %d)...", group_name, taxon_id)
+        inat_data = inat_species_for_month(
+            taxon_id, cfg["lat"], cfg["lng"], cfg["radius"], months_str,
+        )
+        log.info("  Found %d %s species", len(inat_data), group_name)
+        for sci, info in inat_data.items():
+            if info["count"] < 1:
+                continue
+            species_list.append({
+                "common_name": info["common_name"] or sci.split()[0],
+                "scientific_name": sci,
+                "inat_count": info["count"],
+                "taxon_id": info["taxon_id"],
+                "ancestor_ids": info.get("ancestor_ids", []),
+                "default_photo": info.get("default_photo"),
+                "group": group_name,
+            })
+        time.sleep(0.5)
+
+    log.info("\nSea life seasonality from iNaturalist...")
+    for i, entry in enumerate(species_list):
+        tid = entry.get("taxon_id")
+        if not tid:
+            entry["seasonality"] = [0] * 12
+            continue
+        cache_key = f"sea:{tid}"
+        if cache_key in seasonality:
+            entry["seasonality"] = seasonality[cache_key]
+            continue
+        log.info("  [%d/%d] %s (taxon %d)", i + 1, len(species_list), entry["common_name"], tid)
+        hist = inat_monthly_histogram(tid, cfg["lat"], cfg["lng"], cfg["radius"])
+        seasonality[cache_key] = hist
+        entry["seasonality"] = hist
+        save_json(seasonality_path, seasonality)
+        time.sleep(0.3)
+
+    if not cfg.get("skip_images"):
+        log.info("\nDownloading sea life images...")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        success = 0
+        for i, entry in enumerate(species_list):
+            name = entry["common_name"]
+            group_dir = out_dir / safe_filename(entry["group"])
+            base = safe_filename(name)
+            dest1 = group_dir / f"{base}_1.jpg"
+            dest2 = group_dir / f"{base}_2.jpg"
+            log.info("  [%d/%d] %s", i + 1, len(species_list), name)
+
+            photo_urls = []
+            tid = entry.get("taxon_id")
+            if tid:
+                photo_urls.extend(inat_taxon_photos(tid, limit=4))
+            if len(photo_urls) < 2 and tid:
+                photo_urls.extend(
+                    inat_observation_photos(tid, cfg["lat"], cfg["lng"], cfg["radius"], limit=4)
+                )
+
+            if dest1.exists() and dest1.stat().st_size > 1000:
+                entry["image_1"] = str(dest1.relative_to(cfg["output_dir"]))
+            else:
+                for url in photo_urls:
+                    if download_image(url, dest1):
+                        entry["image_1"] = str(dest1.relative_to(cfg["output_dir"]))
+                        break
+                else:
+                    entry["image_1"] = ""
+
+            if dest2.exists() and dest2.stat().st_size > 1000:
+                entry["image_2"] = str(dest2.relative_to(cfg["output_dir"]))
+            else:
+                remaining = photo_urls[1:] if photo_urls else []
+                for url in remaining:
+                    if download_image(url, dest2):
+                        entry["image_2"] = str(dest2.relative_to(cfg["output_dir"]))
+                        break
+                else:
+                    entry["image_2"] = ""
+
+            if entry.get("image_1"):
+                success += 1
+            time.sleep(0.3)
+        log.info("  Images for %d / %d sea life species", success, len(species_list))
+    else:
+        for entry in species_list:
+            base = safe_filename(entry["common_name"])
+            group_dir = out_dir / safe_filename(entry.get("group", ""))
+            d1 = group_dir / f"{base}_1.jpg"
+            d2 = group_dir / f"{base}_2.jpg"
+            entry["image_1"] = str(d1.relative_to(cfg["output_dir"])) if d1.exists() else ""
+            entry["image_2"] = str(d2.relative_to(cfg["output_dir"])) if d2.exists() else ""
+
+    species_list.sort(key=lambda e: (
+        SEA_LIFE_GROUP_ORDER.index(e["group"]) if e["group"] in SEA_LIFE_GROUP_ORDER else 99,
+        -e["inat_count"],
+    ))
+
+    log.info("  Total sea life: %d species", len(species_list))
+    return species_list
+
+
+def build_sea_life_card(entry: dict, current_month_0: int, cfg: dict) -> str:
+    name = esc(title_case_common_name(entry.get("common_name", "")))
+    sci = esc(entry.get("scientific_name", ""))
+    inat_count = entry.get("inat_count", 0)
+
+    img1 = entry.get("image_1", "")
+    img2 = entry.get("image_2", "")
+
+    if img1:
+        layer1 = f'<div class="img-layer active" style="background-image:url(\'{esc_img_path(img1)}\')"></div>'
+    else:
+        layer1 = '<div class="img-layer active" style="background:#ddd"></div>'
+    if img2:
+        layer2 = f'<div class="img-layer" style="background-image:url(\'{esc_img_path(img2)}\')"></div>'
+        flip_btn = '<button class="flip-btn" onclick="flipImg(this)">&#8644;</button>'
+    else:
+        layer2 = ""
+        flip_btn = ""
+
+    season_html = build_season_bar_html(entry.get("seasonality", [0] * 12), current_month_0)
+
+    meta_tags = ""
+    if inat_count:
+        meta_tags += f'<span class="meta-tag">iNat: {inat_count} obs</span>'
+
+    seas = entry.get("seasonality", [0] * 12)
+    apr_may = 1 if (month_level(seas, 3) > 0 or month_level(seas, 4) > 0) else 0
+
+    group_label = esc(entry.get("group", ""))
+    family_tag = f'<div class="family-label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:500;margin-bottom:2px">{group_label}</div>' if group_label else ""
+
+    return f"""<div class="bird-card" data-apr-may="{apr_may}">
+<div class="card-image">{layer1}{layer2}{flip_btn}</div>
+<div class="card-body">
+<div class="card-top">
+{family_tag}
+<h3>{name}</h3>
+<span class="latin">{sci}</span>
+</div>
+{season_html}
+<div class="meta-row">{meta_tags}</div>
+</div>
+</div>"""
 
 
 # ── HTML generation ────────────────────────────────────────────────────
@@ -1627,10 +1994,13 @@ def build_bird_card(bird: dict, current_month_0: int, cfg: dict) -> str:
     seas = bird.get("seasonality", [0] * 12)
     apr_may = 1 if (month_level(seas, 3) > 0 or month_level(seas, 4) > 0) else 0
 
+    family_tag = f'<div class="family-label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:500;margin-bottom:2px">{taxonomy}</div>' if taxonomy else ""
+
     return f"""<div class="bird-card" data-apr-may="{apr_may}">
 <div class="card-image">{layer1}{layer2}{flip_btn}</div>
 <div class="card-body">
 <div class="card-top">
+{family_tag}
 <h3>{name}</h3>
 <span class="latin">{sci}</span>
 {badge}
@@ -1640,9 +2010,6 @@ def build_bird_card(bird: dict, current_month_0: int, cfg: dict) -> str:
 {"<p class='description'>" + desc + "</p>" if desc else ""}
 {"<p class='find-bird'><strong>Where to look:</strong> " + find + "</p>" if find else ""}
 {field_ids_html}
-<div class="card-footer">
-<span class="taxonomy">{taxonomy}</span>
-</div>
 </div>
 </div>"""
 
@@ -1685,10 +2052,13 @@ def build_plant_card(plant: dict, current_month_0: int, cfg: dict) -> str:
     badge_cls = conservation_badge_class(conservation) if conservation else ""
     badge = f'<span class="conservation {badge_cls}">{esc(conservation)}</span>' if conservation else ""
 
+    family_tag = f'<div class="family-label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:500;margin-bottom:2px">{family}</div>' if family else ""
+
     return f"""<div class="bird-card" data-apr-may="{apr_may}">
 <div class="card-image">{layer1}{layer2}{flip_btn}</div>
 <div class="card-body">
 <div class="card-top">
+{family_tag}
 <h3>{name}</h3>
 <span class="latin">{sci}</span>
 {badge}
@@ -1697,9 +2067,6 @@ def build_plant_card(plant: dict, current_month_0: int, cfg: dict) -> str:
 <div class="meta-row">{meta_tags}</div>
 {"<p class='description'>" + desc + "</p>" if desc else ""}
 {"<p class='find-bird'><strong>Habitat:</strong> " + habitat + "</p>" if habitat else ""}
-<div class="card-footer">
-<span class="taxonomy">{family}</span>
-</div>
 </div>
 </div>"""
 
@@ -1737,8 +2104,25 @@ def build_grouped_html(records: list[dict], group_order: list[str],
             f'<span class="group-count">{count} species</span>'
             f'</div>'
         )
-        for rec in groups[g]:
-            card_parts.append(card_fn(rec, current_month_0, cfg))
+        if g == "Trees":
+            sub = {}
+            for rec in groups[g]:
+                fam = rec.get("family", "")
+                sg = TREE_SUBGROUPS.get(fam, "Other Broadleaf")
+                sub.setdefault(sg, []).append(rec)
+            for sg_name in TREE_SUBGROUP_ORDER:
+                if sg_name not in sub:
+                    continue
+                card_parts.append(
+                    f'<div class="subgroup-header" style="font-size:13px;font-weight:600;'
+                    f'color:var(--muted);padding:12px 0 4px;border-bottom:1px solid #eee;'
+                    f'margin:8px 0 12px;letter-spacing:.3px">{esc(sg_name)}</div>'
+                )
+                for rec in sub[sg_name]:
+                    card_parts.append(card_fn(rec, current_month_0, cfg))
+        else:
+            for rec in groups[g]:
+                card_parts.append(card_fn(rec, current_month_0, cfg))
         card_parts.append("</div>")
 
     ungrouped = [g for g in groups if g not in group_order]
@@ -1766,19 +2150,22 @@ def build_grouped_html(records: list[dict], group_order: list[str],
     return "\n".join(nav_parts), "\n".join(card_parts)
 
 
-def generate_html(birds: list[dict], plants: list[dict], cfg: dict):
-    """Generate the combined index.html with Birds/Plants toggle."""
+def generate_html(birds: list[dict], plants: list[dict], cfg: dict, sea_life=None):
+    """Generate the combined index.html with Birds/Plants/Sea Life toggle."""
     current_month_0 = cfg["date"].month - 1
     date_str = cfg["date"].strftime("%B %d, %Y")
     lat_str = f"{abs(cfg['lat']):.4f} {'N' if cfg['lat'] >= 0 else 'S'}"
     lng_str = f"{abs(cfg['lng']):.4f} {'W' if cfg['lng'] < 0 else 'E'}"
 
+    sea_life = sea_life or []
     has_birds = len(birds) > 0
     has_plants = len(plants) > 0
+    has_sea = bool(sea_life)
     has_both = has_birds and has_plants
 
     bird_nav, bird_cards = "", ""
     plant_nav, plant_cards = "", ""
+    sea_nav, sea_cards = "", ""
 
     if has_birds:
         bird_nav, bird_cards = build_grouped_html(
@@ -1790,6 +2177,11 @@ def generate_html(birds: list[dict], plants: list[dict], cfg: dict):
             plants, PLANT_GROUP_ORDER, PLANT_GROUP_COLORS,
             build_plant_card, current_month_0, cfg, "p-",
         )
+    if has_sea:
+        sea_nav, sea_cards = build_grouped_html(
+            sea_life, SEA_LIFE_GROUP_ORDER, SEA_LIFE_GROUP_COLORS,
+            build_sea_life_card, current_month_0, cfg, "s-",
+        )
 
     trip_items = ""
     if cfg.get("moon"):
@@ -1798,34 +2190,42 @@ def generate_html(birds: list[dict], plants: list[dict], cfg: dict):
         trip_items += f'<div class="trip-item"><strong>Tides</strong> {esc(cfg["tides"])}</div>'
 
     tide_table = cfg.get("tide_html", "")
+    moon_html = cfg.get("moon_html", "")
 
     trip_html = ""
-    if trip_items or tide_table:
-        trip_html = f'<div class="trip-info"><div class="trip-grid">{trip_items}</div>{tide_table}</div>'
+    if trip_items or tide_table or moon_html:
+        trip_html = (f'<div class="trip-info"><div class="trip-grid">{trip_items}</div>'
+                     f'<div style="display:flex;gap:20px;flex-wrap:wrap">{tide_table}{moon_html}</div></div>')
 
+    num_modes = sum([has_birds, has_plants, has_sea])
     toggle_html = ""
-    if has_both:
-        toggle_html = (
-            '<div class="mode-toggle">'
-            '<button class="mode-btn active" id="btn-birds" onclick="switchMode(\'birds\')">Birds</button>'
-            '<button class="mode-btn" id="btn-plants" onclick="switchMode(\'plants\')">Plants</button>'
-            '</div>'
-        )
+    if num_modes > 1:
+        btns = []
+        if has_birds:
+            btns.append('<button class="mode-btn active" id="btn-birds" onclick="switchMode(\'birds\')">Birds</button>')
+        if has_plants:
+            btns.append(f'<button class="mode-btn" id="btn-plants" onclick="switchMode(\'plants\')">Plants</button>')
+        if has_sea:
+            btns.append(f'<button class="mode-btn" id="btn-sea" onclick="switchMode(\'sea\')">Sea Life</button>')
+        toggle_html = '<div class="mode-toggle">' + "".join(btns) + '</div>'
 
     bird_nav_block = f'<div class="nav-links" id="nav-birds">{bird_nav}</div>' if has_birds else ""
-    plant_nav_display = ' style="display:none"' if has_both else ""
+    plant_nav_display = ' style="display:none"' if (has_birds and has_plants) else ""
     plant_nav_block = f'<div class="nav-links" id="nav-plants"{plant_nav_display}>{plant_nav}</div>' if has_plants else ""
+    sea_nav_display = ' style="display:none"' if (has_birds or has_plants) else ""
+    sea_nav_block = f'<div class="nav-links" id="nav-sea"{sea_nav_display}>{sea_nav}</div>' if has_sea else ""
 
     stat_text = ""
-    if has_both:
+    if has_birds:
         stat_text = f'{len(birds)} Bird Species'
-    elif has_birds:
-        stat_text = f'{len(birds)} Bird Species'
-    else:
+    elif has_plants:
         stat_text = f'{len(plants)} Plant Species'
+    elif has_sea:
+        stat_text = f'{len(sea_life)} Sea Life Species'
 
     bird_panel_cls = "panel active" if has_birds else "panel"
-    plant_panel_cls = "panel" if has_both else ("panel active" if has_plants else "panel")
+    plant_panel_cls = "panel" if has_birds else ("panel active" if has_plants else "panel")
+    sea_panel_cls = "panel" if (has_birds or has_plants) else ("panel active" if has_sea else "panel")
 
     filter_bar = ('<div class="filter-bar">'
                   '<span style="font-size:12px;color:var(--muted)">Filter:</span>'
@@ -1860,18 +2260,32 @@ def generate_html(birds: list[dict], plants: list[dict], cfg: dict):
 {plant_cards}
 </div>"""
 
+    sea_panel = ""
+    if has_sea:
+        sea_panel = f"""<div class="{sea_panel_cls}" id="panel-sea">
+<div class="page-header">
+<h1>{esc(cfg['place'])} Sea Life Checklist</h1>
+<div class="sub">{len(sea_life)} Species</div>
+<div class="location">{lat_str}, {lng_str}</div>
+<div class="locations">Sources: iNaturalist</div>
+</div>
+{filter_bar}
+{trip_html}
+{sea_cards}
+</div>"""
+
     switch_js = ""
-    if has_both:
+    if num_modes > 1:
         switch_js = f"""
 function switchMode(mode){{
-  var birds=mode==='birds';
-  document.getElementById('panel-birds').classList.toggle('active',birds);
-  document.getElementById('panel-plants').classList.toggle('active',!birds);
-  document.getElementById('nav-birds').style.display=birds?'':'none';
-  document.getElementById('nav-plants').style.display=birds?'none':'';
-  document.getElementById('btn-birds').classList.toggle('active',birds);
-  document.getElementById('btn-plants').classList.toggle('active',!birds);
-  document.getElementById('stat-text').textContent=birds?'{len(birds)} Bird Species':'{len(plants)} Plant Species';
+  var panels=['birds','plants','sea'];
+  var counts={{'birds':'{len(birds)} Bird Species','plants':'{len(plants)} Plant Species','sea':'{len(sea_life)} Sea Life Species'}};
+  panels.forEach(function(p){{
+    var el=document.getElementById('panel-'+p);if(el)el.classList.toggle('active',p===mode);
+    var nv=document.getElementById('nav-'+p);if(nv)nv.style.display=p===mode?'':'none';
+    var bt=document.getElementById('btn-'+p);if(bt)bt.classList.toggle('active',p===mode);
+  }});
+  var st=document.getElementById('stat-text');if(st)st.textContent=counts[mode]||'';
   scrollTo({{top:0}});
 }}"""
 
@@ -1899,10 +2313,12 @@ function switchMode(mode){{
 {toggle_html}
 {bird_nav_block}
 {plant_nav_block}
+{sea_nav_block}
 </nav>
 <main class="main">
 {bird_panel}
 {plant_panel}
+{sea_panel}
 </main>
 </div>
 <button class="back-top" onclick="scrollTo({{top:0,behavior:'smooth'}})">&uarr;</button>
@@ -2070,6 +2486,10 @@ Example:
     if do_plants:
         plants = run_plants(cfg)
 
+    sea_life = []
+    if do_plants:
+        sea_life = run_sea_life(cfg)
+
     if args.tide_station and args.tide_dates:
         parts = args.tide_dates.split(",")
         if len(parts) == 2:
@@ -2083,10 +2503,11 @@ Example:
             if preds:
                 cfg["tide_html"] = format_tide_html(preds, station_name)
                 log.info("  Got %d tide predictions", len(preds))
+            cfg["moon_html"] = compute_moon_phases(parts[0], parts[1])
 
     log.info("\n" + "=" * 60)
     log.info("Generating combined HTML...")
-    generate_html(birds, plants, cfg)
+    generate_html(birds, plants, cfg, sea_life)
 
     log.info("\n" + "=" * 60)
     log.info("Done!")
@@ -2094,6 +2515,8 @@ Example:
         log.info("  Birds:  %d species", len(birds))
     if plants:
         log.info("  Plants: %d species", len(plants))
+    if sea_life:
+        log.info("  Sea Life: %d species", len(sea_life))
     log.info("  Output: %s", output_dir)
     log.info("  Open:   %s", output_dir / "index.html")
     log.info("=" * 60)

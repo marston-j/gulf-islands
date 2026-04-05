@@ -706,7 +706,9 @@ def fetch_ebird_obs(bbox, api_key, back, cache):
 # ─── Leaflet HTML builder ────────────────────────────────────────
 
 MAP_CSS = """
-#leaflet-map{height:calc(100vh - 20px);width:100%;z-index:1}
+#leaflet-map{height:calc(100vh - 20px);width:100%;z-index:1;min-width:0}
+.layout{max-width:none!important}
+@media(min-width:1400px){.main{max-width:none;padding-right:60px}}
 .panel:not(.active){display:none!important;overflow:hidden;height:0}
 .map-layer-toggle{display:flex;align-items:center;gap:8px;padding:5px 16px;font-size:12px;cursor:pointer;user-select:none}
 .map-layer-toggle:hover{background:rgba(0,0,0,.04)}
@@ -959,8 +961,19 @@ def build_parts(layers: dict, bbox: tuple) -> dict:
             f'<span class="map-layer-count">{cnt}</span>'
             f'</label>'
         )
+    layers_icon = (
+        '<div style="display:flex;align-items:center;gap:6px;padding:6px 16px 2px;'
+        'font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">'
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+        'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+        '<polygon points="12 2 2 7 12 12 22 7 12 2"/>'
+        '<polyline points="2 17 12 22 22 17"/>'
+        '<polyline points="2 12 12 17 22 12"/>'
+        '</svg>Layers</div>'
+    )
     nav_html = (
         '<div class="nav-links" id="nav-map" style="display:none">\n'
+        + layers_icon + "\n"
         + "\n".join(nav_items)
         + "\n</div>"
     )
