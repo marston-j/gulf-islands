@@ -721,11 +721,29 @@ MAP_CSS = """
 """
 
 HEAD_CDN = (
-    '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>\n'
-    '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>\n'
-    '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>\n'
-    '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></' + 'script>\n'
-    '<script src="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></' + 'script>\n'
+    '<meta http-equiv="Content-Security-Policy" content="'
+    "default-src 'none';"
+    "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net;"
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com https://cdn.jsdelivr.net;"
+    "img-src 'self' data: https://cdn.download.ams.birds.cornell.edu https://*.basemaps.cartocdn.com https://*.tile.openstreetmap.org https://*.tile.opentopomap.org https://server.arcgisonline.com;"
+    "font-src https://fonts.gstatic.com;"
+    "connect-src 'none';"
+    '"/>\n'
+    '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"'
+    ' integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H"'
+    ' crossorigin="anonymous"/>\n'
+    '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"'
+    ' integrity="sha384-pmjIAcz2bAn0xukfxADbZIb3t8oRT9Sv0rvO+BR5Csr6Dhqq+nZs59P0pPKQJkEV"'
+    ' crossorigin="anonymous"/>\n'
+    '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"'
+    ' integrity="sha384-wgw+aLYNQ7dlhK47ZPK7FRACiq7ROZwgFNg0m04avm4CaXS+Z9Y7nMu8yNjBKYC+"'
+    ' crossorigin="anonymous"/>\n'
+    '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"'
+    ' integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH"'
+    ' crossorigin="anonymous"></' + 'script>\n'
+    '<script src="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"'
+    ' integrity="sha384-eXVCORTRlv4FUUgS/xmOyr66XBVraen8ATNLMESp92FKXLAMiKkerixTiBvXriZr"'
+    ' crossorigin="anonymous"></' + 'script>\n'
 )
 
 MAP_JS_TEMPLATE = r"""

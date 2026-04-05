@@ -830,42 +830,97 @@ def fetch_noaa_tides(station_id: str, begin_date: str, end_date: str) -> list[di
 
 
 def format_tide_html(predictions: list[dict], station_name: str) -> str:
-    """Build an HTML tide table from NOAA predictions."""
+    """Build an inline SVG tide trendline from NOAA predictions."""
     if not predictions:
         return ""
-    rows = []
-    current_date = ""
+
+    from datetime import datetime
+
+    points: list[tuple[float, float]] = []
+    labels: list[dict] = []
+    t0 = None
     for p in predictions:
         dt_str = p.get("t", "")
-        height = p.get("v", "")
+        height = float(p.get("v", 0))
         tide_type = p.get("type", "")
-        date_part = dt_str.split(" ")[0] if " " in dt_str else dt_str
-        time_part = dt_str.split(" ")[1] if " " in dt_str else ""
-        type_label = "High" if tide_type == "H" else "Low"
-        type_color = "#2E6B94" if tide_type == "H" else "#8B7348"
+        try:
+            dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M")
+        except ValueError:
+            continue
+        if t0 is None:
+            t0 = dt
+        hours = (dt - t0).total_seconds() / 3600
+        points.append((hours, height))
+        labels.append({
+            "h": hours, "v": height, "type": tide_type,
+            "date": dt.strftime("%b %d"), "time": dt.strftime("%-I:%M%p").lower(),
+        })
 
-        date_cell = ""
-        if date_part != current_date:
-            current_date = date_part
-            date_cell = f'<td style="font-weight:600;padding:3px 8px;border-top:1px solid #eee">{date_part}</td>'
-        else:
-            date_cell = '<td style="padding:3px 8px"></td>'
+    if len(points) < 2:
+        return ""
 
-        rows.append(
-            f'<tr>{date_cell}'
-            f'<td style="padding:3px 8px">{time_part}</td>'
-            f'<td style="padding:3px 8px;color:{type_color};font-weight:500">{type_label}</td>'
-            f'<td style="padding:3px 8px;text-align:right">{height} ft</td></tr>'
+    max_h = max(h for h, _ in points)
+    min_v = min(v for _, v in points)
+    max_v = max(v for _, v in points)
+    v_range = max_v - min_v or 1.0
+
+    W, H = 480, 80
+    PAD_X, PAD_TOP, PAD_BOT = 6, 8, 16
+
+    def sx(h: float) -> float:
+        return PAD_X + (h / max_h) * (W - 2 * PAD_X)
+
+    def sy(v: float) -> float:
+        return PAD_TOP + (1 - (v - min_v) / v_range) * (H - PAD_TOP - PAD_BOT)
+
+    path_d = " ".join(
+        f"{'M' if i == 0 else 'L'}{sx(h):.1f},{sy(v):.1f}"
+        for i, (h, v) in enumerate(points)
+    )
+
+    day_marks = []
+    seen_dates: set[str] = set()
+    for lb in labels:
+        if lb["date"] not in seen_dates:
+            seen_dates.add(lb["date"])
+            x = sx(lb["h"])
+            day_marks.append(
+                f'<line x1="{x:.1f}" y1="{PAD_TOP}" x2="{x:.1f}" y2="{H - PAD_BOT}" '
+                f'stroke="#e0e0e0" stroke-width="0.5" stroke-dasharray="2,2"/>'
+                f'<text x="{x:.1f}" y="{H - 2}" text-anchor="middle" '
+                f'font-size="7" fill="#999">{lb["date"]}</text>'
+            )
+
+    dots = []
+    for lb in labels:
+        x, y = sx(lb["h"]), sy(lb["v"])
+        color = "#2E6B94" if lb["type"] == "H" else "#8B7348"
+        anchor = "middle"
+        tip = f'{lb["time"]} {lb["v"]:.1f}ft'
+        ty = y - 5 if lb["type"] == "H" else y + 9
+        dots.append(
+            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="2" fill="{color}"/>'
+            f'<text x="{x:.1f}" y="{ty:.1f}" text-anchor="{anchor}" '
+            f'font-size="6.5" fill="{color}">{tip}</text>'
         )
 
+    svg = (
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" '
+        f'style="width:100%;max-width:{W}px;height:auto;display:block">'
+        f'{"".join(day_marks)}'
+        f'<path d="{path_d}" fill="none" stroke="#5a9ec0" stroke-width="1.5" '
+        f'stroke-linejoin="round" stroke-linecap="round"/>'
+        f'{"".join(dots)}'
+        f'</svg>'
+    )
+
     return (
-        f'<div class="tide-table" style="margin:12px 0">'
-        f'<div style="font-size:12px;font-weight:600;margin-bottom:6px">'
-        f'Tide Predictions &middot; {esc(station_name)}</div>'
-        f'<table style="font-size:11px;border-collapse:collapse;width:100%">'
-        f'{"".join(rows)}</table>'
-        f'<div style="font-size:9px;color:#999;margin-top:4px">'
-        f'Source: NOAA Tides &amp; Currents (CO-OPS)</div></div>'
+        f'<div class="tide-table" style="margin:10px 0;max-width:520px">'
+        f'<div style="font-size:11px;font-weight:600;margin-bottom:4px;color:#555">'
+        f'Tides &middot; {esc(station_name)}</div>'
+        f'{svg}'
+        f'<div style="font-size:8px;color:#bbb;margin-top:2px">'
+        f'NOAA CO-OPS &middot; MLLW datum</div></div>'
     )
 
 
@@ -1342,10 +1397,18 @@ def run_plants(cfg: dict) -> list[dict]:
     else:
         log.info("\nStep 4: Skipping image download")
         for entry in species_list:
-            group_dir = out_dir / safe_filename(entry.get("group", ""))
             base = safe_filename(entry["common_name"])
+            group_dir = out_dir / safe_filename(entry.get("group", ""))
             d1 = group_dir / f"{base}_1.jpg"
             d2 = group_dir / f"{base}_2.jpg"
+            if not d1.exists() and out_dir.exists():
+                for alt in out_dir.iterdir():
+                    if alt.is_dir():
+                        alt_d1 = alt / f"{base}_1.jpg"
+                        if alt_d1.exists():
+                            d1 = alt_d1
+                            d2 = alt / f"{base}_2.jpg"
+                            break
             entry["image_1"] = str(d1.relative_to(cfg["output_dir"])) if d1.exists() else ""
             entry["image_2"] = str(d2.relative_to(cfg["output_dir"])) if d2.exists() else ""
 
