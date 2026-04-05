@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-Field Checklist Builder
+Gulf Islands Field Checklist Builder
 
 Generates a combined bird + plant field checklist for any location and date.
 
 Data sources:
   Birds  — eBird API (species list) + Cornell All About Birds (detail, images)
-  Plants — iNaturalist (species list, images) + Go Botany (descriptions)
+  Plants — iNaturalist (species list, images) + Go Botany + USDA PLANTS +
+           Missouri Botanical Garden Plant Finder
   Both   — iNaturalist histograms (seasonality bars)
 
 Produces:
@@ -15,16 +16,14 @@ Produces:
     images/Plants/<Group>/<Species>_1.jpg, _2.jpg
     birds.csv
     plants.csv
-    index.html   (combined page with Birds/Plants toggle)
+    index.html   (combined page with Birds/Plants/Map toggle)
 
 Usage:
   python3 field_checklist.py \\
-    --place "Chappaquiddick Island" \\
+    --place "Gulf Islands" \\
     --date 2026-04-28 \\
-    --lat 41.3636 --lng -70.5025 \\
-    --ebird-key YOUR_KEY \\
-    --moon "Waxing gibbous, 88%. Full moon May 1." \\
-    --tides "Low 5:00 AM ... High 10:30 AM ..."
+    --lat 30.3960 --lng -86.2286 \\
+    --ebird-key YOUR_KEY
 """
 
 import argparse
@@ -587,6 +586,178 @@ def scrape_gobotany(genus: str, species_epithet: str) -> dict:
     return info
 
 
+USDA_PLANTS_URL = "https://plantsservices.sc.egov.usda.gov/api/PlantProfile?symbol={symbol}"
+USDA_SEARCH_URL = "https://plantsservices.sc.egov.usda.gov/api/PlantSearch"
+
+
+def scrape_usda_plants(genus: str, species_epithet: str) -> dict:
+    """Query USDA PLANTS Database for supplemental plant data."""
+    info = {
+        "facts": "", "habitat": "", "native_status": "", "wetland_indicator": "",
+        "growth_habit": "", "duration": "", "family": "", "source": "USDA PLANTS",
+    }
+    sci_name = f"{genus} {species_epithet}"
+    try:
+        resp = requests.get(
+            USDA_SEARCH_URL,
+            params={"SearchText": sci_name, "Rone": "1", "pagesize": "5"},
+            headers=HEADERS, timeout=15,
+        )
+        if resp.status_code != 200:
+            return info
+        html = resp.text
+    except Exception:
+        return info
+
+    symbol_match = re.search(
+        rf'href="/home/plantProfile\?symbol=([A-Z0-9]+)"[^>]*>\s*'
+        rf'{re.escape(genus)}[^<]*{re.escape(species_epithet)}',
+        html, re.IGNORECASE,
+    )
+    if not symbol_match:
+        return info
+    symbol = symbol_match.group(1)
+
+    try:
+        resp = requests.get(
+            f"https://plants.usda.gov/home/plantProfile?symbol={symbol}",
+            headers=HEADERS, timeout=15,
+        )
+        if resp.status_code != 200:
+            return info
+        html = resp.text
+    except Exception:
+        return info
+
+    for label, key in [
+        ("Native Status", "native_status"),
+        ("Wetland Indicator", "wetland_indicator"),
+        ("Growth Habit", "growth_habit"),
+        ("Duration", "duration"),
+    ]:
+        m = re.search(
+            rf'{re.escape(label)}\s*</(?:dt|th|td|span|div)>\s*<(?:dd|td|span|div)[^>]*>(.*?)</(?:dd|td|span|div)>',
+            html, re.DOTALL | re.IGNORECASE,
+        )
+        if m:
+            info[key] = strip_tags(m.group(1))[:200]
+
+    m = re.search(r'Family\s*</(?:dt|th|td|span)>\s*<(?:dd|td|span)[^>]*>(.*?)</', html, re.DOTALL | re.IGNORECASE)
+    if m:
+        info["family"] = strip_tags(m.group(1))[:80]
+
+    parts = []
+    if info["growth_habit"]:
+        parts.append(info["growth_habit"])
+    if info["duration"]:
+        parts.append(info["duration"])
+    if info["native_status"]:
+        parts.append(info["native_status"])
+    if info["wetland_indicator"]:
+        parts.append(f"Wetland indicator: {info['wetland_indicator']}")
+    if parts:
+        info["facts"] = ". ".join(parts) + "."
+
+    return info
+
+
+MOBOT_URL = "https://www.missouribotanicalgarden.org/PlantFinder/PlantFinderDetails.aspx?taxonid={taxon_id}"
+MOBOT_SEARCH = "https://www.missouribotanicalgarden.org/PlantFinder/PlantFinderSearch.aspx"
+
+
+def scrape_mobot(genus: str, species_epithet: str) -> dict:
+    """Query Missouri Botanical Garden Plant Finder for plant descriptions."""
+    info = {"facts": "", "habitat": "", "family": "", "source": "Missouri Botanical Garden"}
+    sci_name = f"{genus} {species_epithet}"
+    try:
+        resp = requests.get(
+            MOBOT_SEARCH,
+            params={"SearchText": sci_name},
+            headers=HEADERS, timeout=15,
+        )
+        if resp.status_code != 200:
+            return info
+        html = resp.text
+    except Exception:
+        return info
+
+    tid_match = re.search(r'taxonid=(\d+)', html, re.IGNORECASE)
+    if not tid_match:
+        return info
+    taxon_id = tid_match.group(1)
+
+    try:
+        resp = requests.get(
+            MOBOT_URL.format(taxon_id=taxon_id),
+            headers=HEADERS, timeout=15,
+        )
+        if resp.status_code != 200:
+            return info
+        html = resp.text
+    except Exception:
+        return info
+
+    m = re.search(
+        r'(?:Plant\s*Basics|General\s*Description|Noteworthy\s*Characteristics).*?<(?:p|div|span)[^>]*>(.*?)</(?:p|div|span)>',
+        html, re.DOTALL | re.IGNORECASE,
+    )
+    if m:
+        text = strip_tags(m.group(1))
+        if len(text) > 30:
+            info["facts"] = text[:600]
+
+    m = re.search(r'Culture.*?<(?:p|div|span)[^>]*>(.*?)</(?:p|div|span)>', html, re.DOTALL | re.IGNORECASE)
+    if m:
+        info["habitat"] = strip_tags(m.group(1))[:300]
+
+    m = re.search(r'Family.*?<(?:a|span|td|dd)[^>]*>(.*?)</', html, re.DOTALL | re.IGNORECASE)
+    if m:
+        info["family"] = strip_tags(m.group(1))[:80]
+
+    return info
+
+
+def scrape_wikipedia(sci_name: str, sentences: int = 5) -> dict:
+    """Fetch a plain-text intro extract from Wikipedia (species, then genus)."""
+    info = {"facts": "", "source": "Wikipedia"}
+
+    for title in [sci_name, sci_name.split()[0] if " " in sci_name else None]:
+        if not title:
+            continue
+        params = {
+            "action": "query", "titles": title, "prop": "extracts",
+            "exintro": "true", "explaintext": "true",
+            "exsentences": str(sentences if title == sci_name else 3),
+            "redirects": "1", "format": "json",
+        }
+        try:
+            resp = requests.get(
+                "https://en.wikipedia.org/w/api.php", params=params,
+                headers={"User-Agent": "GulfIslandsChecklist/1.0"},
+                timeout=12,
+            )
+            if resp.status_code != 200:
+                continue
+            pages = resp.json().get("query", {}).get("pages", {})
+            for pid, page in pages.items():
+                if pid != "-1":
+                    text = page.get("extract", "").strip()
+                    if len(text) > 30:
+                        info["facts"] = text[:800]
+                        return info
+        except Exception:
+            continue
+    return info
+
+
+PLANT_REFERENCE_ATTRIBUTION = (
+    "Compiled from Go Botany / Native Plant Trust, USDA PLANTS Database & "
+    "National Wetland Plant List, Missouri Botanical Garden Plant Finder, "
+    "Wikipedia, Flora Novae Angliae (Haines), Dirr\u2019s Manual of Woody "
+    "Landscape Plants, Florida Natural Heritage Program, NatureServe"
+)
+
+
 # ── Bird pipeline ──────────────────────────────────────────────────────
 
 def assign_bird_group(order: str, family: str) -> str:
@@ -844,11 +1015,103 @@ def run_plants(cfg: dict) -> list[dict]:
         entry["habitat"] = gb.get("habitat", "")
         entry["family"] = gb.get("family", "")
         entry["conservation"] = gb.get("conservation", "")
+        entry["desc_source"] = "Go Botany / Native Plant Trust" if gb.get("facts") else ""
 
         if gb.get("facts"):
             log.info("    %s", gb["facts"][:70] + "...")
         else:
             log.info("    No Go Botany page")
+
+    needs_desc = [e for e in species_list if not e.get("facts")]
+    if needs_desc:
+        log.info("\nStep 2b: USDA PLANTS Database for %d species without Go Botany data...",
+                 len(needs_desc))
+        for i, entry in enumerate(needs_desc):
+            sci = entry["scientific_name"]
+            parts = sci.split()
+            if len(parts) < 2:
+                continue
+            genus, sp_epithet = parts[0], parts[1]
+            cache_key = f"usda_{genus}_{sp_epithet}"
+            log.info("  [%d/%d] %s", i + 1, len(needs_desc), entry["common_name"])
+
+            if cache_key in cache and cache[cache_key].get("facts"):
+                usda = cache[cache_key]
+                log.info("    (cached)")
+            else:
+                usda = scrape_usda_plants(genus, sp_epithet)
+                cache[cache_key] = usda
+                save_json(plant_cache_path, cache)
+                time.sleep(0.4)
+
+            if usda.get("facts"):
+                entry["facts"] = usda["facts"]
+                entry["desc_source"] = "USDA PLANTS Database"
+                if not entry.get("habitat") and usda.get("habitat"):
+                    entry["habitat"] = usda["habitat"]
+                if not entry.get("family") and usda.get("family"):
+                    entry["family"] = usda["family"]
+                log.info("    USDA: %s", usda["facts"][:70] + "...")
+            else:
+                log.info("    No USDA data")
+
+    still_needs_desc = [e for e in species_list if not e.get("facts")]
+    if still_needs_desc:
+        log.info("\nStep 2c: Missouri Botanical Garden for %d remaining species...",
+                 len(still_needs_desc))
+        for i, entry in enumerate(still_needs_desc):
+            sci = entry["scientific_name"]
+            parts = sci.split()
+            if len(parts) < 2:
+                continue
+            genus, sp_epithet = parts[0], parts[1]
+            cache_key = f"mobot_{genus}_{sp_epithet}"
+            log.info("  [%d/%d] %s", i + 1, len(still_needs_desc), entry["common_name"])
+
+            if cache_key in cache and cache[cache_key].get("facts"):
+                mb = cache[cache_key]
+                log.info("    (cached)")
+            else:
+                mb = scrape_mobot(genus, sp_epithet)
+                cache[cache_key] = mb
+                save_json(plant_cache_path, cache)
+                time.sleep(0.4)
+
+            if mb.get("facts"):
+                entry["facts"] = mb["facts"]
+                entry["desc_source"] = "Missouri Botanical Garden"
+                if not entry.get("habitat") and mb.get("habitat"):
+                    entry["habitat"] = mb["habitat"]
+                if not entry.get("family") and mb.get("family"):
+                    entry["family"] = mb["family"]
+                log.info("    MoBotGarden: %s", mb["facts"][:70] + "...")
+            else:
+                log.info("    No MoBotGarden data")
+
+    wiki_needs = [e for e in species_list if not e.get("facts")]
+    if wiki_needs:
+        log.info("\nStep 2d: Wikipedia for %d remaining species...",
+                 len(wiki_needs))
+        for i, entry in enumerate(wiki_needs):
+            sci = entry["scientific_name"]
+            cache_key = f"wiki_{sci.replace(' ', '_')}"
+            log.info("  [%d/%d] %s", i + 1, len(wiki_needs), entry["common_name"])
+
+            if cache_key in cache and cache[cache_key].get("facts"):
+                wp = cache[cache_key]
+                log.info("    (cached)")
+            else:
+                wp = scrape_wikipedia(sci)
+                cache[cache_key] = wp
+                save_json(plant_cache_path, cache)
+                time.sleep(0.5)
+
+            if wp.get("facts"):
+                entry["facts"] = wp["facts"]
+                entry["desc_source"] = "Wikipedia"
+                log.info("    Wikipedia: %s", wp["facts"][:70] + "...")
+            else:
+                log.info("    No Wikipedia data")
 
     needs_family = [e for e in species_list
                     if not e.get("family") and e.get("taxon_id")]
@@ -1058,6 +1321,14 @@ a{color:inherit;text-decoration:none}
 .back-top:hover{opacity:.8}
 .panel{display:none}
 .panel.active{display:block}
+.apr-may-badge{display:inline-block;font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;margin-left:6px;vertical-align:middle;letter-spacing:.3px}
+.badge-present{background:#e8f5e9;color:#2e7d32}
+.badge-absent{background:#fce4ec;color:#c62828}
+.filter-bar{display:flex;align-items:center;gap:10px;padding:8px 0;margin-bottom:10px;flex-wrap:wrap}
+.filter-btn{font-family:'IBM Plex Sans',sans-serif;font-size:12px;padding:4px 12px;border-radius:14px;border:1.5px solid var(--muted);background:none;color:var(--text);cursor:pointer;transition:all .15s}
+.filter-btn:hover{border-color:var(--accent)}
+.filter-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.bird-card.season-hidden{display:none}
 @media(max-width:900px){
   .layout{flex-direction:column}
   .sidebar{position:relative;width:100%;height:auto;border-right:none;border-bottom:1px solid var(--border)}
@@ -1153,7 +1424,10 @@ def build_bird_card(bird: dict, current_month_0: int, cfg: dict) -> str:
     family = esc(bird.get("family", ""))
     taxonomy = f"{order} &middot; {family}" if order and family else order or family
 
-    return f"""<div class="bird-card">
+    seas = bird.get("seasonality", [0] * 12)
+    apr_may = 1 if (month_level(seas, 3) > 0 or month_level(seas, 4) > 0) else 0
+
+    return f"""<div class="bird-card" data-apr-may="{apr_may}">
 <div class="card-image">{layer1}{layer2}{flip_btn}</div>
 <div class="card-body">
 <div class="card-top">
@@ -1200,8 +1474,14 @@ def build_plant_card(plant: dict, current_month_0: int, cfg: dict) -> str:
     meta_tags = ""
     if inat_count:
         meta_tags += f'<span class="meta-tag">iNat: {inat_count} obs</span>'
+    desc_source = plant.get("desc_source", "")
+    if desc_source:
+        meta_tags += f'<span class="meta-tag">{esc(desc_source)}</span>'
 
-    return f"""<div class="bird-card">
+    seas = plant.get("seasonality", [0] * 12)
+    apr_may = 1 if (month_level(seas, 3) > 0 or month_level(seas, 4) > 0) else 0
+
+    return f"""<div class="bird-card" data-apr-may="{apr_may}">
 <div class="card-image">{layer1}{layer2}{flip_btn}</div>
 <div class="card-body">
 <div class="card-top">
@@ -1340,6 +1620,11 @@ def generate_html(birds: list[dict], plants: list[dict], cfg: dict):
     bird_panel_cls = "panel active" if has_birds else "panel"
     plant_panel_cls = "panel" if has_both else ("panel active" if has_plants else "panel")
 
+    filter_bar = ('<div class="filter-bar">'
+                  '<span style="font-size:12px;color:var(--muted)">Filter:</span>'
+                  '<button class="filter-btn" onclick="toggleAprMay(this)">Apr / May Only</button>'
+                  '</div>')
+
     bird_panel = ""
     if has_birds:
         bird_panel = f"""<div class="{bird_panel_cls}" id="panel-birds">
@@ -1349,6 +1634,7 @@ def generate_html(birds: list[dict], plants: list[dict], cfg: dict):
 <div class="location">{lat_str}, {lng_str}</div>
 <div class="locations">Sources: eBird, Cornell All About Birds, iNaturalist</div>
 </div>
+{filter_bar}
 {trip_html}
 {bird_cards}
 </div>"""
@@ -1360,8 +1646,9 @@ def generate_html(birds: list[dict], plants: list[dict], cfg: dict):
 <h1>{esc(cfg['place'])} Plant Checklist</h1>
 <div class="sub">{len(plants)} Species</div>
 <div class="location">{lat_str}, {lng_str}</div>
-<div class="locations">Sources: iNaturalist, Go Botany (Native Plant Trust)</div>
+<div class="locations">Sources: iNaturalist, {esc(PLANT_REFERENCE_ATTRIBUTION)}</div>
 </div>
+{filter_bar}
 {trip_html}
 {plant_cards}
 </div>"""
@@ -1420,7 +1707,33 @@ function flipImg(btn){{
   layers[0].classList.toggle('active');
   layers[1].classList.toggle('active');
 }}
+function initAprMay(){{
+  document.querySelectorAll('.bird-card').forEach(function(card){{
+    var present=card.getAttribute('data-apr-may')==='1';
+    var top=card.querySelector('.card-top');
+    if(top){{
+      var badge=document.createElement('span');
+      badge.className='apr-may-badge '+(present?'badge-present':'badge-absent');
+      badge.textContent=present?'Apr / May':'Not Apr / May';
+      var latin=top.querySelector('.latin');
+      if(latin)latin.after(badge);
+      else top.appendChild(badge);
+    }}
+  }});
+}}
+function toggleAprMay(btn){{
+  btn.classList.toggle('active');
+  var on=btn.classList.contains('active');
+  document.querySelectorAll('.bird-card').forEach(function(card){{
+    if(on && card.getAttribute('data-apr-may')==='0'){{
+      card.classList.add('season-hidden');
+    }} else {{
+      card.classList.remove('season-hidden');
+    }}
+  }});
+}}
 {switch_js}
+document.addEventListener('DOMContentLoaded',initAprMay);
 </script>
 </body>
 </html>"""
@@ -1439,12 +1752,10 @@ def main():
         epilog="""\
 Example:
   python3 field_checklist.py \\
-    --place "Chappaquiddick Island" \\
+    --place "Gulf Islands" \\
     --date 2026-04-28 \\
-    --lat 41.3636 --lng -70.5025 \\
-    --ebird-key YOUR_KEY \\
-    --moon "Waxing gibbous, 88%%. Full moon May 1." \\
-    --tides "Low 5:00 AM ... High 10:30 AM ..."
+    --lat 30.3960 --lng -86.2286 \\
+    --ebird-key YOUR_KEY
 """,
     )
     parser.add_argument("--place", required=True, help="Place name for the checklist header")

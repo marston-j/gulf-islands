@@ -1,23 +1,24 @@
 #!/usr/bin/env python3
 """
-Gulf Coast Trail Map Builder
+Gulf Islands Trail Map Builder
 
 Fetches geographic data from OpenStreetMap (Overpass API) and eBird,
 then injects an interactive Leaflet.js map as a third tab into an
 existing field checklist index.html.
 
-Data layers (12):
-  OSM  — Hiking trails, bike routes, beaches, state parks, wilderness,
-         wildlife refuges, state/national forests, lighthouses, historic
-  NPS  — National Register of Historic Places (points + districts)
+Data layers:
+  OSM  — Hiking trails, bike routes, beaches (public/private/vehicles),
+         state parks, wilderness, wildlife refuges, state/national forests,
+         lighthouses
+  NPS  — Heritage sites (National Register + OSM historic structures)
   eBird — Birding hotspots, 30-day recent observations
 
 Usage:
   python3 trail_map.py \\
-    --bbox 29.9,-88.3,30.85,-85.7 \\
+    --bbox 29.5,-88.3,30.85,-84.0 \\
     --ebird-key YOUR_KEY \\
     --back 30 \\
-    --target output/santa-rosa-beach-florida/index.html
+    --target output/gulf-islands/index.html
 """
 
 import argparse
@@ -52,14 +53,16 @@ NPS_NRHP_API = "https://mapservices.nps.gov/arcgis/rest/services/cultural_resour
 LAYER_DEFS = {
     "hiking":      {"label": "Hiking Trails",       "color": "#D4820F", "on": True},
     "bike":        {"label": "Bike Routes",          "color": "#2E6B94", "on": True},
-    "beaches":     {"label": "Beaches",              "color": "#D4A843", "on": False},
+    "beaches_public":  {"label": "Public Beaches",      "color": "#27AE60", "on": False},
+    "beaches_private": {"label": "Private / Restricted", "color": "#E74C3C", "on": False},
+    "beaches_veh_yes": {"label": "Vehicles Allowed",     "color": "#2980B9", "on": False},
+    "beaches_veh_no":  {"label": "No Vehicles",          "color": "#BDC3C7", "on": False},
     "state_parks": {"label": "State Parks",          "color": "#3A7D50", "on": True},
     "wilderness":  {"label": "Wilderness Areas",     "color": "#4A6A3A", "on": False},
     "refuges":     {"label": "Wildlife Refuges",     "color": "#2A7A7A", "on": False},
     "forests":     {"label": "State / Nat'l Forests", "color": "#2D5A1E", "on": False},
     "lighthouses": {"label": "Lighthouses",          "color": "#C0392B", "on": True},
-    "historic":    {"label": "Historic Structures",  "color": "#7A5230", "on": False},
-    "nrhp":        {"label": "Nat'l Register Sites", "color": "#9B2335", "on": True},
+    "heritage":    {"label": "Heritage Sites",       "color": "#7A5230", "on": True},
     "hotspots":    {"label": "Birding Hotspots",     "color": "#8B4513", "on": True},
     "ebird_obs":   {"label": "eBird Obs (30 d)",     "color": "#1A6B3A", "on": False},
 }
@@ -295,7 +298,7 @@ def fetch_beaches(bbox, cache):
         f'  relation["natural"="beach"]({bb});\n'
         f");\nout body;\n>;\nout skel qt;"
     )
-    return _osm_geojson(q, cache, "beaches", ["name", "surface", "access"])
+    return _osm_geojson(q, cache, "beaches", ["name", "surface", "access", "vehicles"])
 
 
 def fetch_state_parks(bbox, cache):
@@ -465,6 +468,18 @@ def fetch_nrhp(bbox, cache):
     return {"type": "FeatureCollection", "features": features}
 
 
+def fetch_heritage(bbox, cache):
+    """Fetch and merge OSM historic structures + NPS NRHP into one layer."""
+    hist = fetch_historic(bbox, cache)
+    nrhp = fetch_nrhp(bbox, cache)
+    for f in hist.get("features", []):
+        f["properties"]["_source"] = "osm"
+    for f in nrhp.get("features", []):
+        f["properties"]["_source"] = "nrhp"
+    merged = hist.get("features", []) + nrhp.get("features", [])
+    return {"type": "FeatureCollection", "features": merged}
+
+
 # ─── eBird API ────────────────────────────────────────────────────
 
 def fetch_hotspots(bbox, api_key, cache):
@@ -542,37 +557,43 @@ def fetch_ebird_obs(bbox, api_key, back, cache):
                 log.warning("    Obs query at %.2f,%.2f: %s", lat, lng, exc)
         cache[ck] = raw
 
-    agg: dict[tuple, dict] = {}
+    loc_agg: dict[str, dict] = {}
     for obs in raw:
-        sp = obs.get("comName", "Unknown")
         loc = obs.get("locId", "")
-        key = (sp, loc)
-        if key not in agg:
-            agg[key] = {
-                "species": sp,
-                "sciName": obs.get("sciName", ""),
+        if not loc:
+            continue
+        if loc not in loc_agg:
+            loc_agg[loc] = {
                 "locName": obs.get("locName", ""),
                 "lat": obs.get("lat", 0),
                 "lng": obs.get("lng", 0),
-                "obsDt": obs.get("obsDt", ""),
+                "latestDate": obs.get("obsDt", ""),
+                "species": {},
+            }
+        entry = loc_agg[loc]
+        if obs.get("obsDt", "") > entry["latestDate"]:
+            entry["latestDate"] = obs["obsDt"]
+        sp = obs.get("comName", "Unknown")
+        sp_key = obs.get("speciesCode", sp)
+        if sp_key not in entry["species"]:
+            entry["species"][sp_key] = {
+                "species": sp,
+                "sciName": obs.get("sciName", ""),
                 "howMany": obs.get("howMany") or 1,
             }
         else:
-            e = agg[key]
-            if obs.get("obsDt", "") > e["obsDt"]:
-                e["obsDt"] = obs["obsDt"]
-            e["howMany"] = max(e["howMany"], obs.get("howMany") or 1)
+            prev = entry["species"][sp_key]
+            prev["howMany"] = max(prev["howMany"], obs.get("howMany") or 1)
 
     features = []
-    for rec in agg.values():
+    for loc_id, rec in loc_agg.items():
+        sp_list = sorted(rec["species"].values(), key=lambda s: s["species"])
         features.append({
             "type": "Feature",
             "properties": {
-                "species": rec["species"],
-                "sciName": rec["sciName"],
                 "locName": rec["locName"],
-                "obsDt": rec["obsDt"],
-                "howMany": rec["howMany"],
+                "latestDate": rec["latestDate"],
+                "species_list": sp_list,
             },
             "geometry": {
                 "type": "Point",
@@ -611,12 +632,16 @@ var _map=null,_mapLayers={};
 function initMap(){
   if(_map){_map.invalidateSize();return;}
   _map=L.map('leaflet-map',{zoomControl:true}).setView([__CENTER_LAT__,__CENTER_LNG__],9);
+  var minimal=L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+    attribution:'CartoDB',maxZoom:19,subdomains:'abcd'});
   var osm=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
     attribution:'&copy; OpenStreetMap',maxZoom:19});
+  var topo=L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{
+    attribution:'OpenTopoMap',maxZoom:17});
   var sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{
     attribution:'Esri World Imagery',maxZoom:19});
-  osm.addTo(_map);
-  L.control.layers({'Street':osm,'Satellite':sat},null,{collapsed:true}).addTo(_map);
+  minimal.addTo(_map);
+  L.control.layers({'Minimal':minimal,'Street':osm,'Topo':topo,'Satellite':sat},null,{collapsed:true}).addTo(_map);
   L.control.scale().addTo(_map);
 
   function ps(c,d){return function(){return{color:c,weight:2,opacity:.8,fillOpacity:.15,dashArray:d||''};};}
@@ -630,8 +655,26 @@ function initMap(){
   _mapLayers.bike=L.geoJSON(mapData_bike,{style:ps('#2E6B94')});
   bp(_mapLayers.bike,function(p){return '<b>'+(p.name||'Bike Route')+'</b>';});
 
-  _mapLayers.beaches=L.geoJSON(mapData_beaches,{style:ps('#D4A843'),pointToLayer:cm('#D4A843',6)});
-  bp(_mapLayers.beaches,function(p){return '<b>'+(p.name||'Beach')+'</b>';});
+  function beachStyle(color){return function(){return{color:color,weight:3,opacity:.8,fillOpacity:.2};};}
+  function beachPopup(f,layer){
+    var p=f.properties;
+    var s='<b>'+(p.name||'Beach')+'</b>';
+    if(p.access)s+='<br>Access: '+(p.access==='yes'||p.access==='public'?'\u2705 Public':'\u{1F512} Private');
+    if(p.vehicles)s+='<br>Vehicles: '+(p.vehicles==='yes'?'\u{1F697} Allowed':'\u{1F6AB} Not allowed');
+    layer.bindPopup(s);
+  }
+  _mapLayers.beaches_public=L.geoJSON(mapData_beaches,{
+    filter:function(f){var a=f.properties.access;return !a||a==='yes'||a==='public';},
+    style:beachStyle('#2196F3'),onEachFeature:beachPopup,pointToLayer:cm('#2196F3',6)});
+  _mapLayers.beaches_private=L.geoJSON(mapData_beaches,{
+    filter:function(f){var a=f.properties.access;return a==='private'||a==='no';},
+    style:beachStyle('#FF5722'),onEachFeature:beachPopup,pointToLayer:cm('#FF5722',6)});
+  _mapLayers.beaches_veh_yes=L.geoJSON(mapData_beaches,{
+    filter:function(f){return f.properties.vehicles==='yes';},
+    style:beachStyle('#4CAF50'),onEachFeature:beachPopup,pointToLayer:cm('#4CAF50',6)});
+  _mapLayers.beaches_veh_no=L.geoJSON(mapData_beaches,{
+    filter:function(f){return f.properties.vehicles==='no';},
+    style:beachStyle('#9C27B0'),onEachFeature:beachPopup,pointToLayer:cm('#9C27B0',6)});
 
   _mapLayers.state_parks=L.geoJSON(mapData_state_parks,{style:ps('#3A7D50')});
   bp(_mapLayers.state_parks,function(p){return '<b>'+(p.name||'State Park')+'</b>'+(p.protection_title?'<br>'+p.protection_title:'');});
@@ -655,28 +698,49 @@ function initMap(){
   });
   bp(_mapLayers.lighthouses,function(p){return '<b>'+(p.name||'Lighthouse')+'</b>'+(p.start_date?'<br>Built: '+p.start_date:'');});
 
-  _mapLayers.historic=L.geoJSON(mapData_historic,{pointToLayer:cm('#7A5230',5),style:ps('#7A5230')});
-  bp(_mapLayers.historic,function(p){var t=p.historic||p.tourism||'';var s='<b>'+(p.name||'Historic Site')+'</b>';if(t)s+='<br><i>'+t+'</i>';if(p.start_date)s+='<br>Est. '+p.start_date;if(p.operator)s+='<br>'+p.operator;if(p.website)s+='<br><a href="'+p.website+'" target="_blank">More info</a>';return s;});
-
-  _mapLayers.nrhp=L.geoJSON(mapData_nrhp,{
+  _mapLayers.heritage=L.geoJSON(mapData_heritage,{
     pointToLayer:function(f,ll){
-      var p=f.properties,nhl=p.nhl;
-      return L.circleMarker(ll,{radius:nhl?8:5,fillColor:nhl?'#FFD700':'#9B2335',
-        color:nhl?'#8B6914':'#333',weight:nhl?2:1,fillOpacity:.9});
+      var p=f.properties;
+      if(p._source==='nrhp'){
+        var nhl=p.nhl;
+        return L.circleMarker(ll,{radius:nhl?8:5,fillColor:nhl?'#FFD700':'#9B2335',
+          color:nhl?'#8B6914':'#333',weight:nhl?2:1,fillOpacity:.9});
+      }
+      return L.circleMarker(ll,{radius:5,fillColor:'#7A5230',color:'#333',weight:1,fillOpacity:.85});
     },
-    style:ps('#9B2335','4 4')
-  });
-  bp(_mapLayers.nrhp,function(p){
-    var s='<b>'+(p.name||'NRHP Site')+'</b>';
-    if(p.nhl)s+=' <span style="color:#DAA520;font-weight:700">★ NHL</span>';
-    if(p.type)s+='<br><i>'+p.type+'</i>';
-    if(p.address)s+='<br>'+p.address;
-    if(p.city||p.county)s+='<br>'+(p.city||'')+(p.city&&p.county?', ':'')+
-      (p.county?p.county+' Co.':'');
-    if(p.listed)s+='<br>Listed: '+p.listed;
-    if(p.nara)s+='<br><a href="'+p.nara+'" target="_blank">NARA record</a>';
-    if(p.refnum)s+='<br><span style="color:#888;font-size:10px">NRIS #'+p.refnum+'</span>';
-    return s;
+    style:function(f){
+      var p=f.properties;
+      if(p._source==='nrhp')return{color:'#9B2335',weight:2,opacity:.8,fillOpacity:.15,dashArray:'4 4'};
+      return{color:'#7A5230',weight:2,opacity:.8,fillOpacity:.15};
+    },
+    onEachFeature:function(f,layer){
+      var p=f.properties,s='<div style="max-width:300px">';
+      if(p._source==='nrhp'){
+        s+='<b>'+(p.name||'NRHP Site')+'</b>';
+        if(p.nhl)s+=' <span style="color:#DAA520;font-weight:700">\u2605 National Historic Landmark</span>';
+        if(p.type)s+='<br><span style="font-size:11px;color:#666;text-transform:capitalize">'+p.type+'</span>';
+        if(p.address)s+='<div style="font-size:11px;color:#444;margin-top:3px">'+p.address+'</div>';
+        if(p.city||p.county){s+='<div style="font-size:11px;color:#444">';if(p.city)s+=p.city;if(p.city&&p.county)s+=', ';if(p.county)s+=p.county+' Co.';if(p.state)s+=', '+p.state;s+='</div>';}
+        if(p.listed)s+='<div style="font-size:11px;margin-top:3px"><span style="background:#f0e8f5;padding:1px 5px;border-radius:3px">Listed '+p.listed+'</span></div>';
+        if(p.nara)s+='<div style="margin-top:5px;font-size:11px"><a href="'+p.nara+'" target="_blank">NARA Record</a></div>';
+        if(p.refnum)s+='<div style="font-size:9px;color:#999;margin-top:2px">NRIS #'+p.refnum+'</div>';
+      } else {
+        s+='<b>'+(p.name||'Historic Site')+'</b>';
+        var tags=[];
+        if(p.historic)tags.push(p.historic);
+        if(p.tourism)tags.push(p.tourism);
+        if(tags.length)s+='<br><span style="font-size:11px;color:#666;text-transform:capitalize">'+tags.join(' \u00b7 ')+'</span>';
+        if(p.description)s+='<div style="font-size:11px;color:#444;margin-top:3px;line-height:1.4">'+p.description+'</div>';
+        if(p.start_date)s+='<div style="font-size:11px;margin-top:3px"><span style="background:#f5f0e8;padding:1px 5px;border-radius:3px">Est. '+p.start_date+'</span></div>';
+        if(p.operator)s+='<div style="font-size:11px;color:#555;margin-top:2px">'+p.operator+'</div>';
+        var links=[];
+        if(p.website)links.push('<a href="'+p.website+'" target="_blank">Website</a>');
+        if(p.wikipedia)links.push('<a href="https://en.wikipedia.org/wiki/'+encodeURIComponent(p.wikipedia)+'" target="_blank">Wikipedia</a>');
+        if(links.length)s+='<div style="margin-top:5px;font-size:11px;display:flex;gap:8px">'+links.join('')+'</div>';
+      }
+      s+='</div>';
+      layer.bindPopup(s,{maxWidth:320});
+    }
   });
 
   _mapLayers.hotspots=L.geoJSON(mapData_hotspots,{
@@ -689,8 +753,23 @@ function initMap(){
       return L.divIcon({html:'<div><span>'+n+'</span></div>',className:'marker-cluster marker-cluster-'+sz,iconSize:L.point(40,40)});}});
   L.geoJSON(mapData_ebird_obs,{
     pointToLayer:function(f,ll){return L.circleMarker(ll,{radius:4,fillColor:'#1A6B3A',color:'#fff',weight:1,fillOpacity:.8});},
-    onEachFeature:function(f,layer){var p=f.properties;
-      layer.bindPopup('<span class="popup-species">'+p.species+'</span><br><i>'+p.sciName+'</i><br><span class="popup-meta">'+p.locName+'<br>'+p.obsDt+(p.howMany>1?' ('+p.howMany+')':'')+'</span>');}
+    onEachFeature:function(f,layer){
+      var p=f.properties;
+      if(p.species_list){
+        var list=p.species_list;
+        var s='<div style="max-width:300px"><b>'+(p.locName||'Observation')+'</b><br><span style="font-size:11px;color:#555">'+list.length+' species \u00b7 Latest: '+(p.latestDate||'')+'</span><div style="max-height:200px;overflow-y:auto;margin-top:4px">';
+        var show=Math.min(list.length,12);
+        for(var i=0;i<show;i++){
+          var sp=list[i];
+          s+='<div style="font-size:11px;padding:1px 0;border-bottom:1px solid #eee"><span class="popup-species">'+sp.species+'</span>'+(sp.howMany>1?' ('+sp.howMany+')':'')+'</div>';
+        }
+        if(list.length>12)s+='<div style="font-size:11px;color:#888;padding:2px 0">+ '+(list.length-12)+' more species</div>';
+        s+='</div></div>';
+        layer.bindPopup(s,{maxWidth:320,maxHeight:300});
+      } else {
+        layer.bindPopup('<span class="popup-species">'+(p.species||'')+'</span><br><i>'+(p.sciName||'')+'</i><br><span class="popup-meta">'+(p.locName||'')+'<br>'+(p.obsDt||'')+'</span>');
+      }
+    }
   }).addTo(obsCluster);
   _mapLayers.ebird_obs=obsCluster;
 
@@ -715,7 +794,7 @@ function switchMode(mode){
     if(n)n.style.display=m===mode?'':'none';
     if(b)b.classList.toggle('active',m===mode);
   });
-  var stats={birds:'__BCOUNT__ Bird Species',plants:'__PCOUNT__ Plant Species',map:'Interactive Trail Map'};
+  var stats={birds:'__BCOUNT__ Bird Species',plants:'__PCOUNT__ Plant Species',map:'Map'};
   document.getElementById('stat-text').textContent=stats[mode]||'';
   if(mode==='map'){initMap();}else{scrollTo({top:0});}
 }
@@ -726,10 +805,26 @@ def build_parts(layers: dict, bbox: tuple) -> dict:
     s, w, n, e = bbox
     clat, clng = (s + n) / 2, (w + e) / 2
 
+    beaches_gj = layers.get("beaches", {"type": "FeatureCollection", "features": []})
+    beach_features = beaches_gj.get("features", [])
+
+    def _beach_count(pred):
+        return sum(1 for f in beach_features if pred(f.get("properties", {})))
+
+    beach_counts = {
+        "beaches_public": _beach_count(lambda p: p.get("access", "") in ("", "yes", "public")),
+        "beaches_private": _beach_count(lambda p: p.get("access", "") in ("private", "no")),
+        "beaches_veh_yes": _beach_count(lambda p: p.get("vehicles", "") == "yes"),
+        "beaches_veh_no": _beach_count(lambda p: p.get("vehicles", "") == "no"),
+    }
+
     nav_items = []
     for key, ld in LAYER_DEFS.items():
         chk = "checked" if ld["on"] else ""
-        cnt = len(layers.get(key, {}).get("features", []))
+        if key in beach_counts:
+            cnt = beach_counts[key]
+        else:
+            cnt = len(layers.get(key, {}).get("features", []))
         nav_items.append(
             f'<label class="map-layer-toggle">'
             f'<input type="checkbox" {chk} onchange="toggleMapLayer(\'{key}\',this.checked)">'
@@ -746,8 +841,15 @@ def build_parts(layers: dict, bbox: tuple) -> dict:
 
     panel_html = '<div class="panel" id="panel-map"><div id="leaflet-map"></div></div>'
 
-    data_lines = []
+    data_keys = set()
     for key in LAYER_DEFS:
+        if key.startswith("beaches_"):
+            data_keys.add("beaches")
+        else:
+            data_keys.add(key)
+
+    data_lines = []
+    for key in data_keys:
         gj = layers.get(key, {"type": "FeatureCollection", "features": []})
         data_lines.append(f"var mapData_{key}={json.dumps(gj, separators=(',', ':'))};")
     data_script = "\n".join(data_lines)
@@ -869,7 +971,7 @@ def main():
     cache = load_cache(cache_path)
 
     log.info("=" * 60)
-    log.info("Gulf Coast Trail Map Builder")
+    log.info("Gulf Islands Trail Map Builder")
     log.info("  bbox  S=%.2f  W=%.2f  N=%.2f  E=%.2f", *bbox)
     log.info("  target  %s", target)
     log.info("=" * 60)
@@ -887,8 +989,7 @@ def main():
         ("refuges",     fetch_refuges,     "Wildlife refuges"),
         ("forests",     fetch_forests,     "State/nat'l forests"),
         ("lighthouses", fetch_lighthouses, "Lighthouses"),
-        ("historic",    fetch_historic,    "Historic structures"),
-        ("nrhp",        fetch_nrhp,        "Nat'l Register sites"),
+        ("heritage",    fetch_heritage,    "Heritage sites"),
     ]
     total_osm = len(fetchers)
     for i, (key, fn, label) in enumerate(fetchers, 1):
