@@ -914,21 +914,7 @@ function toggleMapLayer(key,on){
 }
 """
 
-SWITCH_JS_TEMPLATE = """
-function switchMode(mode){
-  ['birds','plants','map'].forEach(function(m){
-    var p=document.getElementById('panel-'+m);
-    var n=document.getElementById('nav-'+m);
-    var b=document.getElementById('btn-'+m);
-    if(p){p.classList.toggle('active',m===mode);p.style.display=m===mode?'block':'none';}
-    if(n)n.style.display=m===mode?'':'none';
-    if(b)b.classList.toggle('active',m===mode);
-  });
-  var stats={birds:'__BCOUNT__ Bird Species',plants:'__PCOUNT__ Plant Species',map:'Map'};
-  document.getElementById('stat-text').textContent=stats[mode]||'';
-  if(mode==='map'){initMap();}else{scrollTo({top:0});}
-}
-"""
+SWITCH_JS_TEMPLATE = ""
 
 
 def build_parts(layers: dict, bbox: tuple) -> dict:
@@ -1035,68 +1021,37 @@ def inject_map_tab(target: Path, parts: dict):
         backup.write_text(html, encoding="utf-8")
         log.info("Saved clean backup to %s", backup.name)
 
-    bird_count = "0"
-    plant_count = "0"
-    m = re.search(r"birds\?'(\d+)\s+Bird", html)
-    if m:
-        bird_count = m.group(1)
-    m = re.search(r"[':]\s*'(\d+)\s+Plant", html)
-    if m:
-        plant_count = m.group(1)
-
-    switch_js = (
-        SWITCH_JS_TEMPLATE
-        .replace("__BCOUNT__", bird_count)
-        .replace("__PCOUNT__", plant_count)
-    )
-
     html = html.replace("</style>", MAP_CSS + "</style>", 1)
 
     html = html.replace("</head>", HEAD_CDN + "</head>", 1)
 
-    html = html.replace(
-        """onclick="switchMode('plants')">Plants</button></div>""",
-        """onclick="switchMode('plants')">Plants</button>"""
-        """<button class="mode-btn" id="btn-map" onclick="switchMode('map')">Map</button></div>""",
-    )
+    # Insert Map button at end of mode-toggle div
+    if 'id="btn-map"' not in html:
+        map_btn = '<button class="mode-btn" id="btn-map" onclick="switchMode(\'map\')">Map</button>'
+        # Find the closing </div> of the mode-toggle by matching the last button before it
+        html = re.sub(
+            r'(class="mode-toggle">[^<]*(?:<button[^>]*>.*?</button>\s*)+)(</div>)',
+            lambda m: m.group(1) + map_btn + m.group(2),
+            html,
+            count=1,
+            flags=re.DOTALL,
+        )
 
     html = html.replace("</nav>", parts["nav_html"] + "\n</nav>", 1)
 
     html = html.replace("</main>", parts["panel_html"] + "\n</main>", 1)
 
-    preserved_js = ""
-    m = re.search(r"(function initAprMay\b.*?function toggleAprMay\b.*?^\})",
-                  html, re.DOTALL | re.MULTILINE)
-    if m:
-        preserved_js = m.group(0)
-    if not preserved_js:
-        m2 = re.search(r"(function initAprMay\(.*?(?=function switchMode|document\.addEventListener|</))",
-                       html, re.DOTALL)
-        if m2:
-            preserved_js = m2.group(1)
-
-    new_script = (
-        "<script>\n"
-        + parts["data_script"] + "\n"
-        + "function flipImg(btn){\n"
-        "  var card=btn.parentElement;\n"
-        "  var layers=card.querySelectorAll('.img-layer');\n"
-        "  if(layers.length<2)return;\n"
-        "  layers[0].classList.toggle('active');\n"
-        "  layers[1].classList.toggle('active');\n"
-        "}\n"
-        + preserved_js + "\n"
-        + switch_js + "\n"
-        + parts["init_js"] + "\n"
-        + "\ndocument.addEventListener('DOMContentLoaded',initAprMay);\n"
-        + "</script>"
-    )
-    html = re.sub(
-        r"<script>\s*function flipImg.*?</script>",
-        lambda _: new_script,
-        html,
-        flags=re.DOTALL,
-    )
+    # Inject map data and init function into existing script block.
+    # Use string find/replace instead of regex to avoid issues with
+    # Unicode escapes in map data conflicting with regex replacement.
+    marker = "document.addEventListener('DOMContentLoaded',initAprMay)"
+    idx = html.find(marker)
+    if idx == -1:
+        marker = "document.addEventListener('DOMContentLoaded', initAprMay)"
+        idx = html.find(marker)
+    if idx >= 0:
+        map_inject = parts["data_script"] + "\n" + parts["init_js"] + "\n"
+        html = html[:idx] + map_inject + "\n" + html[idx:]
 
     target.write_text(html, encoding="utf-8")
     log.info("Wrote %s (%d KB)", target, len(html) // 1024)

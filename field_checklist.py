@@ -115,7 +115,7 @@ PLANT_GROUP_COLORS = {
     "Vines": "#7a5a6a",
 }
 
-SEA_LIFE_GROUP_ORDER = ["Fish", "Mollusks", "Crustaceans", "Jellyfish & Corals", "Echinoderms", "Marine Reptiles", "Marine Mammals"]
+SEA_LIFE_GROUP_ORDER = ["Fish", "Mollusks", "Crustaceans", "Jellyfish & Corals", "Echinoderms", "Seaweed & Algae", "Marine Reptiles", "Marine Mammals"]
 
 SEA_LIFE_GROUP_COLORS = {
     "Fish": "#2E6B94",
@@ -123,6 +123,7 @@ SEA_LIFE_GROUP_COLORS = {
     "Crustaceans": "#B85C38",
     "Jellyfish & Corals": "#7B5EA7",
     "Echinoderms": "#5A8A6A",
+    "Seaweed & Algae": "#3a7a5a",
     "Marine Reptiles": "#6B7820",
     "Marine Mammals": "#505060",
 }
@@ -133,6 +134,9 @@ SEA_LIFE_TAXON_IDS = {
     85493: "Crustaceans",
     47534: "Jellyfish & Corals",
     47549: "Echinoderms",
+    48222: "Seaweed & Algae",   # Chromista / Phaeophyceae + others
+    57774: "Seaweed & Algae",   # Rhodophyta (red algae)
+    47533: "Seaweed & Algae",   # Chlorophyta (green algae)
     73863: "Marine Reptiles",
     40151: "Marine Mammals",
 }
@@ -453,7 +457,8 @@ def ebird_recent_species(lat: float, lng: float, radius_km: int,
 # ── iNaturalist API ────────────────────────────────────────────────────
 
 def inat_species_for_month(taxon_id: int, lat: float, lng: float,
-                           radius_km: int, months: str) -> dict:
+                           radius_km: int, months: str,
+                           require_native: bool = True) -> dict:
     """Get species observed in given months near coordinates.
 
     Returns {scientific_name: {count, taxon_id, common_name, ...}}.
@@ -467,10 +472,11 @@ def inat_species_for_month(taxon_id: int, lat: float, lng: float,
             "radius": radius_km,
             "month": months,
             "quality_grade": "research",
-            "native": "true",
             "per_page": 200,
             "page": page,
         }
+        if require_native:
+            params["native"] = "true"
         try:
             resp = requests.get(
                 f"{INAT_API}/observations/species_counts",
@@ -901,8 +907,8 @@ def format_tide_html(predictions: list[dict], station_name: str) -> str:
     max_v = max(v for _, v in points)
     v_range = max_v - min_v or 1.0
 
-    W, H = 480, 80
-    PAD_X, PAD_TOP, PAD_BOT = 6, 8, 16
+    W, H = 560, 110
+    PAD_X, PAD_TOP, PAD_BOT = 8, 10, 20
 
     def sx(h: float) -> float:
         return PAD_X + (h / max_h) * (W - 2 * PAD_X)
@@ -961,7 +967,7 @@ def format_tide_html(predictions: list[dict], station_name: str) -> str:
 
     svg = (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" '
-        f'style="width:100%;max-width:{W}px;height:auto;display:block">'
+        f'style="width:100%;max-width:{W}px;height:auto;display:block;min-height:80px">'
         f'{"".join(day_marks)}'
         f'<path d="{fill_d}" fill="rgba(90,158,192,0.08)" stroke="none"/>'
         f'<path d="{path_d}" fill="none" stroke="#5a9ec0" stroke-width="1.5" '
@@ -971,7 +977,7 @@ def format_tide_html(predictions: list[dict], station_name: str) -> str:
     )
 
     return (
-        f'<div class="tide-table" style="margin:10px 0;max-width:520px">'
+        f'<div class="tide-table" style="margin:10px 0;max-width:600px">'
         f'<div style="font-size:11px;font-weight:600;margin-bottom:4px;color:#555">'
         f'Tides &middot; {esc(station_name)}</div>'
         f'{svg}'
@@ -985,18 +991,19 @@ def compute_moon_phases(start_date: str, end_date: str) -> str:
     from datetime import datetime, timedelta
     import math
 
+    # Known new-moon epoch: 2000-01-06 18:14 UTC (JDE 2451550.26)
+    _NEW_MOON_JDE = 2451550.26
+    _SYNODIC = 29.530588853
+
     def moon_phase(year, month, day):
-        if month <= 2:
-            year -= 1
-            month += 12
-        a = year // 100
-        b = 2 - a + a // 4
-        jd = int(365.25 * (year + 4716)) + int(30.6001 * (month + 1)) + day + b - 1524.5
-        days_since = jd - 2451550.1
-        lunations = days_since / 29.530588853
-        phase = lunations - int(lunations)
-        if phase < 0:
-            phase += 1
+        """Return lunation fraction 0..1  (0 = new, 0.5 = full)."""
+        a = (14 - month) // 12
+        y = year + 4800 - a
+        m = month + 12 * a - 3
+        jdn = day + (153 * m + 2) // 5 + 365 * y + y // 4 - y // 100 + y // 400 - 32045
+        jd = jdn + 0.5  # noon UT
+        phase = (jd - _NEW_MOON_JDE) / _SYNODIC
+        phase = phase - math.floor(phase)
         return phase
 
     try:
@@ -1048,7 +1055,7 @@ def compute_moon_phases(start_date: str, end_date: str) -> str:
     if not icons:
         return ""
     return (
-        '<div style="margin:10px 0;max-width:520px">'
+        '<div style="margin:10px 0;max-width:600px">'
         '<div style="font-size:11px;font-weight:600;margin-bottom:4px;color:#555">Moon Phases</div>'
         '<div style="display:flex;gap:6px;flex-wrap:wrap">'
         + "".join(icons)
@@ -1658,15 +1665,18 @@ def run_sea_life(cfg: dict) -> list[dict]:
     seasonality = load_json(seasonality_path)
     species_list = []
 
+    seen_species: set[str] = set()
     for taxon_id, group_name in SEA_LIFE_TAXON_IDS.items():
         log.info("\nQuerying iNaturalist for %s (taxon %d)...", group_name, taxon_id)
         inat_data = inat_species_for_month(
             taxon_id, cfg["lat"], cfg["lng"], cfg["radius"], months_str,
+            require_native=False,
         )
         log.info("  Found %d %s species", len(inat_data), group_name)
         for sci, info in inat_data.items():
-            if info["count"] < 1:
+            if info["count"] < 1 or sci in seen_species:
                 continue
+            seen_species.add(sci)
             species_list.append({
                 "common_name": info["common_name"] or sci.split()[0],
                 "scientific_name": sci,
@@ -2215,6 +2225,7 @@ def generate_html(birds: list[dict], plants: list[dict], cfg: dict, sea_life=Non
     sea_nav_display = ' style="display:none"' if (has_birds or has_plants) else ""
     sea_nav_block = f'<div class="nav-links" id="nav-sea"{sea_nav_display}>{sea_nav}</div>' if has_sea else ""
 
+    total_species = len(birds) + len(plants) + len(sea_life)
     stat_text = ""
     if has_birds:
         stat_text = f'{len(birds)} Bird Species'
@@ -2278,15 +2289,15 @@ def generate_html(birds: list[dict], plants: list[dict], cfg: dict, sea_life=Non
     if num_modes > 1:
         switch_js = f"""
 function switchMode(mode){{
-  var panels=['birds','plants','sea'];
-  var counts={{'birds':'{len(birds)} Bird Species','plants':'{len(plants)} Plant Species','sea':'{len(sea_life)} Sea Life Species'}};
+  var panels=['birds','plants','sea','map'];
+  var counts={{'birds':'{len(birds)} Bird Species','plants':'{len(plants)} Plant Species','sea':'{len(sea_life)} Sea Life Species','map':'Map'}};
   panels.forEach(function(p){{
-    var el=document.getElementById('panel-'+p);if(el)el.classList.toggle('active',p===mode);
+    var el=document.getElementById('panel-'+p);if(el){{el.classList.toggle('active',p===mode);el.style.display=p===mode?'block':'none';}}
     var nv=document.getElementById('nav-'+p);if(nv)nv.style.display=p===mode?'':'none';
     var bt=document.getElementById('btn-'+p);if(bt)bt.classList.toggle('active',p===mode);
   }});
   var st=document.getElementById('stat-text');if(st)st.textContent=counts[mode]||'';
-  scrollTo({{top:0}});
+  if(mode==='map'&&typeof initMap==='function'){{initMap();}}else{{scrollTo({{top:0}});}}
 }}"""
 
     html = f"""<!DOCTYPE html>
@@ -2379,10 +2390,18 @@ function toggleAprMay(btn){{
   var total=panel.querySelectorAll('.bird-card:not(.season-hidden)').length;
   var stat=document.getElementById('stat-text');
   if(stat){{
-    var isBirds=panel.id==='panel-birds';
-    stat.textContent=total+(isBirds?' Bird Species':' Plant Species');
+    var suffix=' Species';
+    if(panel.id==='panel-birds')suffix=' Bird Species';
+    else if(panel.id==='panel-plants')suffix=' Plant Species';
+    else if(panel.id==='panel-sea')suffix=' Sea Life Species';
+    stat.textContent=total+suffix;
   }}
-  var nav=document.getElementById(panel.id==='panel-birds'?'nav-birds':'nav-plants');
+  var sub=panel.querySelector('.page-header .sub');
+  if(sub){{sub.textContent=total+' Species';}}
+  var navId='nav-birds';
+  if(panel.id==='panel-plants')navId='nav-plants';
+  else if(panel.id==='panel-sea')navId='nav-sea';
+  var nav=document.getElementById(navId);
   if(nav){{
     nav.querySelectorAll('.nav-link').forEach(function(link){{
       var href=link.getAttribute('href');
