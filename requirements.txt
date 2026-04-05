@@ -1,0 +1,6 @@
+# Field checklist & trail map
+requests
+osm2geojson
+
+# Nature scanner (optional — macOS only)
+# osxphotos
