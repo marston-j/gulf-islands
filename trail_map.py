@@ -735,7 +735,7 @@ HEAD_CDN = (
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com https://cdn.jsdelivr.net;"
     "img-src 'self' data: https://cdn.download.ams.birds.cornell.edu https://*.basemaps.cartocdn.com https://*.tile.openstreetmap.org https://*.tile.opentopomap.org https://server.arcgisonline.com;"
     "font-src https://fonts.gstatic.com;"
-    "frame-src https://macaulaylibrary.org;"
+    "media-src https://cdn.download.ams.birds.cornell.edu;"
     "connect-src 'none';"
     '"/>\n'
     '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"'

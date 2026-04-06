@@ -2196,9 +2196,9 @@ a{color:inherit;text-decoration:none}
 .field-meas{font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--muted);margin-bottom:6px;letter-spacing:.1px}
 .field-id{font-size:12px;line-height:1.55;color:#444;margin-bottom:4px}
 .field-id strong{color:var(--text);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.3px;margin-right:4px}
-.bird-audio{margin:8px 0;border-radius:6px;overflow:hidden}
-.bird-audio iframe{border:none}
-.sounds-link{display:inline-block;font-size:11px;color:#2E6B94;text-decoration:none;padding:4px 0;font-weight:500;letter-spacing:.2px}
+.bird-audio{margin:8px 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.bird-audio audio{height:32px;flex:1;min-width:180px;max-width:320px}
+.sounds-link{font-size:11px;color:#2E6B94;text-decoration:none;font-weight:500;letter-spacing:.2px;white-space:nowrap}
 .sounds-link:hover{text-decoration:underline}
 .card-footer{margin-top:auto;padding-top:8px;border-top:1px solid var(--border)}
 .taxonomy{font-size:10px;color:var(--muted);letter-spacing:.2px;font-family:'IBM Plex Mono',monospace}
@@ -2318,16 +2318,16 @@ def build_bird_card(bird: dict, current_month_0: int, cfg: dict) -> str:
     sounds_url = bird.get("sounds_url", "")
     audio_html = ""
     if audio_ml_id:
+        audio_src = f"https://cdn.download.ams.birds.cornell.edu/api/v2/asset/{esc(audio_ml_id)}/mp4/1280"
         audio_html = (
             f'<div class="bird-audio">'
-            f'<iframe src="https://macaulaylibrary.org/asset/{esc(audio_ml_id)}/embed" '
-            f'width="100%" height="115" frameborder="0" allowfullscreen '
-            f'loading="lazy" style="border-radius:4px"></iframe>'
+            f'<audio controls preload="none" src="{audio_src}">'
+            f'<a href="{audio_src}">Listen</a></audio>'
         )
         if sounds_url:
             audio_html += (
                 f'<a href="{esc(sounds_url)}" target="_blank" rel="noopener" '
-                f'class="sounds-link">More sounds on All About Birds &#8599;</a>'
+                f'class="sounds-link">All sounds &#8599;</a>'
             )
         audio_html += '</div>'
     elif sounds_url:
