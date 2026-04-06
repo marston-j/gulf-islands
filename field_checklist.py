@@ -1169,21 +1169,39 @@ def compute_moon_phases(start_date: str, end_date: str) -> str:
         return raw_phases[-1][1]
 
     def _moon_svg(phase_frac: float, r: int = 12, cx: int = 14, cy: int = 14) -> str:
+        """Render a moon disc.  Northern-hemisphere convention:
+        waxing = right side lit (dark on left), waning = left side lit (dark on right).
+        phase_frac: 0 = new, 0.25 = first quarter, 0.5 = full, 0.75 = last quarter.
+        """
         illum = 0.5 * (1 - math.cos(2 * math.pi * phase_frac))
-        if illum < 0.02:
+        if illum < 0.005:
             return f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="#222" stroke="#555" stroke-width="0.5"/>'
-        if illum > 0.98:
+        if illum > 0.995:
             return f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="#F5E6B8" stroke="#DAC68D" stroke-width="0.5"/>'
-        waning = phase_frac > 0.5
-        f_val = abs(2 * illum - 1)
-        sweep_outer = "0" if waning else "1"
-        dx = r * f_val
-        sweep_inner = ("1" if waning else "0") if illum < 0.5 else ("0" if waning else "1")
+
+        waxing = phase_frac <= 0.5
+        dx = r * abs(2 * illum - 1)
+
+        if waxing:
+            if illum < 0.5:
+                outer_sweep = "0"
+                inner_sweep = "1"
+            else:
+                outer_sweep = "0"
+                inner_sweep = "0"
+        else:
+            if illum < 0.5:
+                outer_sweep = "1"
+                inner_sweep = "0"
+            else:
+                outer_sweep = "1"
+                inner_sweep = "1"
+
         return (
             f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="#F5E6B8" stroke="#DAC68D" stroke-width="0.5"/>'
             f'<path d="M{cx},{cy - r} '
-            f'A{r},{r} 0 0,{sweep_outer} {cx},{cy + r} '
-            f'A{dx:.1f},{r} 0 0,{sweep_inner} {cx},{cy - r}" fill="#222"/>'
+            f'A{r},{r} 0 0,{outer_sweep} {cx},{cy + r} '
+            f'A{dx:.1f},{r} 0 0,{inner_sweep} {cx},{cy - r}" fill="#222"/>'
         )
 
     icons = []
