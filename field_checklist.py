@@ -46,6 +46,7 @@ import requests
 CORNELL_CDN = "https://cdn.download.ams.birds.cornell.edu/api/v1/asset/{asset_id}/640"
 CORNELL_GUIDE = "https://www.allaboutbirds.org/guide/{slug}"
 CORNELL_ID_URL = "https://www.allaboutbirds.org/guide/{slug}/id"
+CORNELL_SOUNDS_URL = "https://www.allaboutbirds.org/guide/{slug}/sounds"
 EBIRD_API = "https://api.ebird.org/v2"
 GOBOTANY_SPECIES = "https://gobotany.nativeplanttrust.org/species/{genus}/{species}/"
 INAT_API = "https://api.inaturalist.org/v1"
@@ -426,6 +427,26 @@ def scrape_cornell_field_ids(slug: str) -> dict:
     return info
 
 
+def scrape_cornell_sounds(slug: str) -> dict:
+    """Scrape the All About Birds sounds page for the first audio ML asset ID."""
+    url = CORNELL_SOUNDS_URL.format(slug=quote(slug, safe="/_-"))
+    info = {"audio_ml_id": "", "sounds_url": url}
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=15)
+        if resp.status_code != 200:
+            return info
+        html = resp.text
+    except Exception:
+        return info
+
+    ml_ids = re.findall(r'asset/(\d+)', html)
+    for ml_id in ml_ids:
+        if int(ml_id) > 10000:
+            info["audio_ml_id"] = ml_id
+            break
+    return info
+
+
 # ── eBird API ──────────────────────────────────────────────────────────
 
 def ebird_recent_species(lat: float, lng: float, radius_km: int,
@@ -799,7 +820,8 @@ def scrape_mobot(genus: str, species_epithet: str) -> dict:
     return info
 
 
-def scrape_wikipedia(sci_name: str, sentences: int = 5) -> dict:
+def scrape_wikipedia(sci_name: str, sentences: int = 5,
+                     max_chars: int = 800) -> dict:
     """Fetch a plain-text intro extract from Wikipedia (species, then genus)."""
     info = {"facts": "", "source": "Wikipedia"}
 
@@ -825,7 +847,7 @@ def scrape_wikipedia(sci_name: str, sentences: int = 5) -> dict:
                 if pid != "-1":
                     text = page.get("extract", "").strip()
                     if len(text) > 30:
-                        info["facts"] = text[:800]
+                        info["facts"] = text[:max_chars]
                         return info
         except Exception:
             continue
@@ -910,8 +932,8 @@ def format_tide_html(predictions: list[dict], station_name: str) -> str:
     max_v = max(v for _, v in points)
     v_range = max_v - min_v or 1.0
 
-    W, H = 720, 150
-    PAD_X, PAD_TOP, PAD_BOT = 10, 14, 24
+    W, H = 900, 200
+    PAD_X, PAD_TOP, PAD_BOT = 12, 18, 30
 
     def sx(h: float) -> float:
         return PAD_X + (h / max_h) * (W - 2 * PAD_X)
@@ -953,7 +975,7 @@ def format_tide_html(predictions: list[dict], station_name: str) -> str:
                 f'<line x1="{x:.1f}" y1="{PAD_TOP}" x2="{x:.1f}" y2="{H - PAD_BOT}" '
                 f'stroke="#e0e0e0" stroke-width="0.5" stroke-dasharray="2,2"/>'
                 f'<text x="{x:.1f}" y="{H - 2}" text-anchor="middle" '
-                f'font-size="9" fill="#999">{lb["date"]}</text>'
+                f'font-size="11" fill="#999">{lb["date"]}</text>'
             )
 
     dots = []
@@ -961,16 +983,16 @@ def format_tide_html(predictions: list[dict], station_name: str) -> str:
         x, y = sx(lb["h"]), sy(lb["v"])
         color = "#2E6B94" if lb["type"] == "H" else "#8B7348"
         tip = f'{lb["time"]} {lb["v"]:.1f}ft'
-        ty = y - 7 if lb["type"] == "H" else y + 12
+        ty = y - 9 if lb["type"] == "H" else y + 14
         dots.append(
-            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3" fill="{color}"/>'
+            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3.5" fill="{color}"/>'
             f'<text x="{x:.1f}" y="{ty:.1f}" text-anchor="middle" '
-            f'font-size="9" fill="{color}">{tip}</text>'
+            f'font-size="10" fill="{color}">{tip}</text>'
         )
 
     svg = (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" '
-        f'style="width:100%;max-width:{W}px;height:auto;display:block;min-height:110px">'
+        f'style="width:100%;max-width:{W}px;height:auto;display:block;min-height:150px">'
         f'{"".join(day_marks)}'
         f'<path d="{fill_d}" fill="rgba(90,158,192,0.08)" stroke="none"/>'
         f'<path d="{path_d}" fill="none" stroke="#5a9ec0" stroke-width="1.5" '
@@ -980,8 +1002,8 @@ def format_tide_html(predictions: list[dict], station_name: str) -> str:
     )
 
     return (
-        f'<div class="tide-table" style="margin:10px 0;max-width:760px">'
-        f'<div style="font-size:13px;font-weight:600;margin-bottom:4px;color:#555">'
+        f'<div class="tide-table" style="margin:10px 0;max-width:940px">'
+        f'<div style="font-size:14px;font-weight:600;margin-bottom:4px;color:#555">'
         f'Tides &middot; {esc(station_name)}</div>'
         f'{svg}'
         f'<div style="font-size:8px;color:#bbb;margin-top:2px">'
@@ -994,20 +1016,25 @@ def compute_moon_phases(start_date: str, end_date: str) -> str:
     from datetime import datetime, timedelta
     import math
 
-    # Known new-moon epoch: 2000-01-06 18:14 UTC (JDE 2451550.26)
-    _NEW_MOON_JDE = 2451550.26
+    _NEW_MOON_JDE = 2451550.1   # 2000-01-06 ~18:14 UTC
     _SYNODIC = 29.530588853
+
+    def _jd(year, month, day):
+        """Julian Day for 0h UT (midnight) on Gregorian date."""
+        if month <= 2:
+            year -= 1
+            month += 12
+        A = year // 100
+        B = 2 - A + A // 4
+        return (int(365.25 * (year + 4716))
+                + int(30.6001 * (month + 1))
+                + day + B - 1524.5)
 
     def moon_phase(year, month, day):
         """Return lunation fraction 0..1  (0 = new, 0.5 = full)."""
-        a = (14 - month) // 12
-        y = year + 4800 - a
-        m = month + 12 * a - 3
-        jdn = day + (153 * m + 2) // 5 + 365 * y + y // 4 - y // 100 + y // 400 - 32045
-        jd = jdn + 0.5  # noon UT
+        jd = _jd(year, month, day)
         phase = (jd - _NEW_MOON_JDE) / _SYNODIC
-        phase = phase - math.floor(phase)
-        return phase
+        return phase - math.floor(phase)
 
     try:
         d0 = datetime.strptime(start_date, "%Y%m%d")
@@ -1022,8 +1049,8 @@ def compute_moon_phases(start_date: str, end_date: str) -> str:
         illum = 0.5 * (1 - math.cos(2 * math.pi * p))
         lbl = d.strftime("%b %d")
 
-        r = 8
-        cx, cy = 10, 10
+        r = 10
+        cx, cy = 12, 12
         if illum < 0.02:
             phase_name = "New"
             moon_svg = (f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="#333" stroke="#666" stroke-width="0.5"/>')
@@ -1049,8 +1076,8 @@ def compute_moon_phases(start_date: str, end_date: str) -> str:
 
         icons.append(
             f'<div style="text-align:center;flex-shrink:0">'
-            f'<svg width="20" height="20" viewBox="0 0 20 20">{moon_svg}</svg>'
-            f'<div style="font-size:7px;color:#999;margin-top:1px">{lbl}</div>'
+            f'<svg width="24" height="24" viewBox="0 0 24 24">{moon_svg}</svg>'
+            f'<div style="font-size:8px;color:#999;margin-top:1px">{lbl}</div>'
             f'</div>'
         )
         d += timedelta(days=1)
@@ -1058,8 +1085,8 @@ def compute_moon_phases(start_date: str, end_date: str) -> str:
     if not icons:
         return ""
     return (
-        '<div style="margin:10px 0;max-width:760px">'
-        '<div style="font-size:13px;font-weight:600;margin-bottom:4px;color:#555">Moon Phases</div>'
+        '<div style="margin:10px 0;max-width:940px">'
+        '<div style="font-size:14px;font-weight:600;margin-bottom:4px;color:#555">Moon Phases</div>'
         '<div style="display:flex;gap:6px;flex-wrap:wrap">'
         + "".join(icons)
         + '</div></div>'
@@ -1145,6 +1172,20 @@ def run_birds(cfg: dict) -> list[dict]:
             cache[name] = info
             save_json(bird_cache_path, cache)
             time.sleep(0.5)
+
+        audio_cache_key = f"audio_{slug}"
+        if audio_cache_key in cache and cache[audio_cache_key].get("audio_ml_id"):
+            sounds = cache[audio_cache_key]
+        elif audio_cache_key in cache:
+            sounds = cache[audio_cache_key]
+        else:
+            sounds = scrape_cornell_sounds(slug)
+            cache[audio_cache_key] = sounds
+            save_json(bird_cache_path, cache)
+            time.sleep(0.4)
+
+        info["audio_ml_id"] = sounds.get("audio_ml_id", "")
+        info["sounds_url"] = sounds.get("sounds_url", "")
 
         group = assign_bird_group(info.get("order", ""), info.get("family", ""))
         if is_conservation_elevated(info.get("conservation", "")):
@@ -1374,6 +1415,40 @@ def run_plants(cfg: dict) -> list[dict]:
         else:
             log.info("    No Go Botany page")
 
+    def _is_tree_candidate(entry):
+        gb = entry.get("gobotany", {})
+        gf = gb.get("growth_form", "")
+        if "tree" in gf:
+            return True
+        family = gb.get("family", "")
+        fam_clean = family.split("(")[0].strip().split(",")[0].strip()
+        return fam_clean in TREE_FAMILIES
+
+    tree_entries = [e for e in species_list if _is_tree_candidate(e)]
+    if tree_entries:
+        log.info("\nStep 2a: Wikipedia for %d tree species (longer descriptions)...",
+                 len(tree_entries))
+        for i, entry in enumerate(tree_entries):
+            sci = entry["scientific_name"]
+            cache_key = f"wiki_tree_{sci.replace(' ', '_')}"
+            log.info("  [%d/%d] %s", i + 1, len(tree_entries), entry["common_name"])
+
+            if cache_key in cache and cache[cache_key].get("facts"):
+                wp = cache[cache_key]
+                log.info("    (cached)")
+            else:
+                wp = scrape_wikipedia(sci, sentences=8, max_chars=1200)
+                cache[cache_key] = wp
+                save_json(plant_cache_path, cache)
+                time.sleep(0.5)
+
+            if wp.get("facts"):
+                entry["facts"] = wp["facts"]
+                entry["desc_source"] = "Wikipedia"
+                log.info("    Wikipedia: %s", wp["facts"][:70] + "...")
+            else:
+                log.info("    No Wikipedia data, keeping Go Botany")
+
     needs_desc = [e for e in species_list if not e.get("facts")]
     if needs_desc:
         log.info("\nStep 2b: USDA PLANTS Database for %d species without Go Botany data...",
@@ -1453,7 +1528,7 @@ def run_plants(cfg: dict) -> list[dict]:
                 wp = cache[cache_key]
                 log.info("    (cached)")
             else:
-                wp = scrape_wikipedia(sci)
+                wp = scrape_wikipedia(sci, sentences=7, max_chars=1000)
                 cache[cache_key] = wp
                 save_json(plant_cache_path, cache)
                 time.sleep(0.5)
@@ -1930,6 +2005,10 @@ a{color:inherit;text-decoration:none}
 .field-meas{font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--muted);margin-bottom:6px;letter-spacing:.1px}
 .field-id{font-size:12px;line-height:1.55;color:#444;margin-bottom:4px}
 .field-id strong{color:var(--text);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.3px;margin-right:4px}
+.bird-audio{margin:8px 0;border-radius:6px;overflow:hidden}
+.bird-audio iframe{border:none}
+.sounds-link{display:inline-block;font-size:11px;color:#2E6B94;text-decoration:none;padding:4px 0;font-weight:500;letter-spacing:.2px}
+.sounds-link:hover{text-decoration:underline}
 .card-footer{margin-top:auto;padding-top:8px;border-top:1px solid var(--border)}
 .taxonomy{font-size:10px;color:var(--muted);letter-spacing:.2px;font-family:'IBM Plex Mono',monospace}
 .back-top{position:fixed;bottom:24px;right:24px;background:var(--text);color:var(--bg);width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;border:none;opacity:.3;transition:opacity .2s}
@@ -2044,6 +2123,30 @@ def build_bird_card(bird: dict, current_month_0: int, cfg: dict) -> str:
 
     family_tag = f'<div class="family-label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:500;margin-bottom:2px">{taxonomy}</div>' if taxonomy else ""
 
+    audio_ml_id = bird.get("audio_ml_id", "")
+    sounds_url = bird.get("sounds_url", "")
+    audio_html = ""
+    if audio_ml_id:
+        audio_html = (
+            f'<div class="bird-audio">'
+            f'<iframe src="https://macaulaylibrary.org/asset/{esc(audio_ml_id)}/embed" '
+            f'width="100%" height="115" frameborder="0" allowfullscreen '
+            f'loading="lazy" style="border-radius:4px"></iframe>'
+        )
+        if sounds_url:
+            audio_html += (
+                f'<a href="{esc(sounds_url)}" target="_blank" rel="noopener" '
+                f'class="sounds-link">More sounds on All About Birds &#8599;</a>'
+            )
+        audio_html += '</div>'
+    elif sounds_url:
+        audio_html = (
+            f'<div class="bird-audio">'
+            f'<a href="{esc(sounds_url)}" target="_blank" rel="noopener" '
+            f'class="sounds-link">Listen on All About Birds &#8599;</a>'
+            f'</div>'
+        )
+
     return f"""<div class="bird-card" data-apr-may="{apr_may}">
 <div class="card-image">{layer1}{layer2}{flip_btn}</div>
 <div class="card-body">
@@ -2057,6 +2160,7 @@ def build_bird_card(bird: dict, current_month_0: int, cfg: dict) -> str:
 <div class="meta-row">{meta_tags}</div>
 {"<p class='description'>" + desc + "</p>" if desc else ""}
 {"<p class='find-bird'><strong>Where to look:</strong> " + find + "</p>" if find else ""}
+{audio_html}
 {field_ids_html}
 </div>
 </div>"""

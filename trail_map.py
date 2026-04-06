@@ -68,7 +68,7 @@ LAYER_DEFS = {
     "forests":     {"label": "State / Nat'l Forests", "color": "#2D5A1E", "on": False},
     "lighthouses": {"label": "Lighthouses",          "color": "#C0392B", "on": True},
     "heritage":    {"label": "Heritage Sites",       "color": "#7A5230", "on": True},
-    "aquatic_preserves": {"label": "Aquatic Preserves", "color": "#0077B6", "on": False},
+    "critical_wildlife": {"label": "Protected Wildlife Areas", "color": "#C62828", "on": False},
     "nerrs":       {"label": "Estuarine Reserves",   "color": "#005F73", "on": False},
     "inat_rare":   {"label": "Rare Species (iNat)",  "color": "#D4380D", "on": False},
     "hotspots":    {"label": "Birding Hotspots",     "color": "#8B4513", "on": True},
@@ -490,18 +490,21 @@ def fetch_heritage(bbox, cache):
 
 # ─── Ecological layers ─────────────────────────────────────────────
 
-def fetch_aquatic_preserves(bbox, cache):
-    """Fetch aquatic preserve boundaries from OSM."""
+def fetch_critical_wildlife(bbox, cache):
+    """Fetch critical/protected wildlife areas from OSM."""
     bb = bbox_ql(bbox)
     q = (
         f"[out:json][timeout:300];\n"
         f"(\n"
-        f'  relation["boundary"="protected_area"]["name"~"Aquatic Preserve",i]({bb});\n'
-        f'  way["boundary"="protected_area"]["name"~"Aquatic Preserve",i]({bb});\n'
+        f'  relation["boundary"="protected_area"]["protect_class"~"^(1|1a|1b|2|3|4)$"]({bb});\n'
+        f'  way["boundary"="protected_area"]["protect_class"~"^(1|1a|1b|2|3|4)$"]({bb});\n'
+        f'  node["natural"="bird_hide"]({bb});\n'
+        f'  node["leisure"="bird_hide"]({bb});\n'
         f");\nout body;\n>;\nout skel qt;"
     )
-    return _osm_geojson(q, cache, "aquatic_preserves_v1",
-                        ["name", "protect_class", "protection_title"])
+    return _osm_geojson(q, cache, "critical_wildlife_v2",
+                        ["name", "protect_class", "protection_title",
+                         "operator", "designation"])
 
 
 def fetch_nerrs(bbox, cache):
@@ -729,6 +732,7 @@ HEAD_CDN = (
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com https://cdn.jsdelivr.net;"
     "img-src 'self' data: https://cdn.download.ams.birds.cornell.edu https://*.basemaps.cartocdn.com https://*.tile.openstreetmap.org https://*.tile.opentopomap.org https://server.arcgisonline.com;"
     "font-src https://fonts.gstatic.com;"
+    "frame-src https://macaulaylibrary.org;"
     "connect-src 'none';"
     '"/>\n'
     '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"'
@@ -858,8 +862,11 @@ function initMap(){
     }
   });
 
-  _mapLayers.aquatic_preserves=L.geoJSON(mapData_aquatic_preserves,{style:ps('#0077B6','6 3')});
-  bp(_mapLayers.aquatic_preserves,function(p){return '<b>'+(p.name||'Aquatic Preserve')+'</b>'+(p.protection_title?'<br>'+p.protection_title:'');});
+  _mapLayers.critical_wildlife=L.geoJSON(mapData_critical_wildlife,{
+    style:ps('#C62828','4 4'),
+    pointToLayer:function(f,ll){return L.circleMarker(ll,{radius:7,fillColor:'#C62828',color:'#fff',weight:2,fillOpacity:.9});}
+  });
+  bp(_mapLayers.critical_wildlife,function(p){var s='<b>'+(p.name||'Protected Wildlife Area')+'</b>';if(p.protect_class)s+='<br><span style="font-size:11px;color:#555">IUCN Class '+p.protect_class+'</span>';if(p.operator)s+='<br><span style="font-size:10px;color:#666">'+p.operator+'</span>';return s;});
 
   _mapLayers.nerrs=L.geoJSON(mapData_nerrs,{style:ps('#005F73','4 6')});
   bp(_mapLayers.nerrs,function(p){return '<b>'+(p.name||'Estuarine Reserve')+'</b>'+(p.protection_title?'<br>'+p.protection_title:'');});
@@ -939,6 +946,8 @@ def build_parts(layers: dict, bbox: tuple) -> dict:
             cnt = beach_counts[key]
         else:
             cnt = len(layers.get(key, {}).get("features", []))
+        if cnt == 0 and not ld["on"]:
+            continue
         nav_items.append(
             f'<label class="map-layer-toggle">'
             f'<input type="checkbox" {chk} onchange="toggleMapLayer(\'{key}\',this.checked)">'
@@ -947,37 +956,8 @@ def build_parts(layers: dict, bbox: tuple) -> dict:
             f'<span class="map-layer-count">{cnt}</span>'
             f'</label>'
         )
-    layers_icon = (
-        '<div style="margin:8px 12px 6px;border-radius:6px;overflow:hidden;'
-        'border:1px solid var(--border)">'
-        '<div style="height:72px;background:linear-gradient(135deg,#c8dbb4 0%,#a8c8d8 40%,#d4c8a0 70%,#e8d8b8 100%);'
-        'position:relative;display:flex;align-items:center;justify-content:center">'
-        '<svg width="80" height="48" viewBox="0 0 80 48" fill="none" xmlns="http://www.w3.org/2000/svg">'
-        '<path d="M0 38 Q10 30 20 34 T40 28 T60 32 T80 26" stroke="#7a9a6a" stroke-width="1.5" fill="none" opacity=".5"/>'
-        '<path d="M0 42 Q15 36 25 38 T50 34 T75 36 L80 48 L0 48Z" fill="#9ab88a" opacity=".3"/>'
-        '<circle cx="18" cy="20" r="2" fill="#C0392B" opacity=".7"/>'
-        '<circle cx="42" cy="16" r="2" fill="#8B4513" opacity=".7"/>'
-        '<circle cx="60" cy="22" r="2" fill="#8B4513" opacity=".7"/>'
-        '<path d="M30 12 L32 8 L34 12 Z" fill="#D4820F" opacity=".6"/>'
-        '<line x1="25" y1="25" x2="55" y2="20" stroke="#D4820F" stroke-width="1" stroke-dasharray="3,2" opacity=".5"/>'
-        '</svg>'
-        '</div>'
-        '<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;'
-        'background:#fafafa;border-top:1px solid var(--border)">'
-        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
-        'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
-        '<polygon points="12 2 2 7 12 12 22 7 12 2"/>'
-        '<polyline points="2 17 12 22 22 17"/>'
-        '<polyline points="2 12 12 17 22 12"/>'
-        '</svg>'
-        '<div>'
-        '<div style="font-size:11px;font-weight:600;color:var(--text);letter-spacing:.3px">Map Layers</div>'
-        '<div style="font-size:9px;color:var(--muted)">Toggle data overlays</div>'
-        '</div></div></div>'
-    )
     nav_html = (
         '<div class="nav-links" id="nav-map" style="display:none">\n'
-        + layers_icon + "\n"
         + "\n".join(nav_items)
         + "\n</div>"
     )
@@ -987,7 +967,7 @@ def build_parts(layers: dict, bbox: tuple) -> dict:
         '<div style="padding:8px 16px;font-size:9px;color:#999;line-height:1.6">'
         'Map data: OpenStreetMap, NPS National Register of Historic Places, '
         'eBird (Cornell Lab of Ornithology), iNaturalist, '
-        'Florida DEP Aquatic Preserves, NOAA NERR. '
+        'OSM Protected Areas, NOAA NERR. '
         'Tiles: CartoDB, OpenTopoMap, Esri World Imagery.</div></div>'
     )
 
@@ -1125,7 +1105,7 @@ def main():
         ("forests",           fetch_forests,            "State/nat'l forests"),
         ("lighthouses",       fetch_lighthouses,       "Lighthouses"),
         ("heritage",          fetch_heritage,          "Heritage sites"),
-        ("aquatic_preserves", fetch_aquatic_preserves, "Aquatic preserves"),
+        ("critical_wildlife", fetch_critical_wildlife, "Protected wildlife areas"),
         ("nerrs",             fetch_nerrs,             "Estuarine reserves"),
         ("inat_rare",         fetch_inat_rare,         "Rare species (iNat)"),
     ]
