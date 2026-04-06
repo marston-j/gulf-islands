@@ -859,6 +859,80 @@ def scrape_wikipedia(sci_name: str, sentences: int = 5,
     return info
 
 
+WORMS_API = "https://www.marinespecies.org/rest"
+
+
+def fetch_worms_record(sci_name: str) -> dict:
+    """Look up a marine species in WoRMS and return taxonomy + attributes."""
+    info: dict = {}
+    try:
+        r = requests.get(
+            f"{WORMS_API}/AphiaRecordsByMatchNames",
+            params={"scientificnames[]": sci_name, "marine_only": "false"},
+            headers=HEADERS, timeout=15,
+        )
+        if r.status_code != 200:
+            return info
+        matches = r.json()
+        if not matches or not matches[0]:
+            return info
+        rec = matches[0][0]
+        aphia_id = rec.get("AphiaID")
+        if not aphia_id:
+            return info
+
+        for field in ("phylum", "class", "order", "family"):
+            if rec.get(field):
+                info[field] = rec[field]
+        if rec.get("isMarine"):
+            info["marine"] = True
+        if rec.get("isBrackish"):
+            info["brackish"] = True
+
+        attrs = requests.get(
+            f"{WORMS_API}/AphiaAttributesByAphiaID/{aphia_id}",
+            headers=HEADERS, timeout=15,
+        )
+        if attrs.status_code == 200:
+            for attr in attrs.json():
+                mtype = attr.get("measurementType", "")
+                mval = attr.get("measurementValue", "")
+                if mtype == "Body size" and mval:
+                    unit = ""
+                    btype = ""
+                    for child in attr.get("children", []):
+                        if child.get("measurementType") == "Unit":
+                            unit = child.get("measurementValue", "")
+                        if child.get("measurementType") == "Type":
+                            btype = child.get("measurementValue", "")
+                    size_str = f"{mval} {unit}".strip()
+                    if btype:
+                        size_str += f" ({btype})"
+                    info.setdefault("body_sizes", []).append(size_str)
+                elif "Functional group" in mtype and mval:
+                    info.setdefault("functional_groups", []).append(mval)
+                elif "habitat" in mtype.lower() and mval:
+                    info.setdefault("habitats", []).append(mval)
+                elif "depth" in mtype.lower() and mval:
+                    info["depth"] = mval
+
+        dists = requests.get(
+            f"{WORMS_API}/AphiaDistributionsByAphiaID/{aphia_id}",
+            headers=HEADERS, timeout=15,
+        )
+        if dists.status_code == 200:
+            regions = []
+            for d in dists.json():
+                loc = d.get("locality", "")
+                if loc and loc not in regions:
+                    regions.append(loc)
+            if regions:
+                info["distribution"] = regions[:6]
+    except Exception as exc:
+        log.debug("WoRMS lookup failed for %s: %s", sci_name, exc)
+    return info
+
+
 NOAA_COOPS_API = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
 
 # Nearest tide stations by region
@@ -1839,31 +1913,62 @@ def run_sea_life(cfg: dict) -> list[dict]:
 
     sea_cache_path = cfg["output_dir"] / ".sea_cache.json"
     sea_cache = load_json(sea_cache_path)
-    log.info("\nFetching Wikipedia descriptions for sea life...")
+
+    log.info("\nFetching Wikipedia descriptions for sea life (full intro)...")
+    fetched_wp = 0
     for i, entry in enumerate(species_list):
         sci = entry["scientific_name"]
         cache_key = f"wiki_{sci.replace(' ', '_')}"
-        if cache_key in sea_cache and sea_cache[cache_key].get("facts"):
-            entry["facts"] = sea_cache[cache_key]["facts"]
+        cached = sea_cache.get(cache_key, {})
+        if cached.get("facts") and len(cached["facts"]) >= 300:
+            entry["facts"] = cached["facts"]
             entry["desc_source"] = "Wikipedia"
             continue
-        if cache_key in sea_cache:
-            entry["facts"] = ""
-            entry["desc_source"] = ""
-            continue
         log.info("  [%d/%d] %s", i + 1, len(species_list), entry["common_name"])
-        wp = scrape_wikipedia(sci)
+        wp = scrape_wikipedia(sci, sentences=0, max_chars=1500)
         sea_cache[cache_key] = wp
         save_json(sea_cache_path, sea_cache)
+        fetched_wp += 1
         if wp.get("facts"):
             entry["facts"] = wp["facts"]
             entry["desc_source"] = "Wikipedia"
-            log.info("    Wikipedia: %s", wp["facts"][:70] + "...")
+            log.info("    Wikipedia (%d chars): %s", len(wp["facts"]), wp["facts"][:70] + "...")
         else:
             entry["facts"] = ""
             entry["desc_source"] = ""
             log.info("    No Wikipedia data")
-        time.sleep(0.5)
+        time.sleep(0.4)
+    log.info("  Fetched %d new Wikipedia descriptions", fetched_wp)
+
+    log.info("\nEnriching sea life with WoRMS taxonomy & attributes...")
+    worms_hits = 0
+    for i, entry in enumerate(species_list):
+        sci = entry["scientific_name"]
+        worms_key = f"worms_{sci.replace(' ', '_')}"
+        if worms_key in sea_cache:
+            wd = sea_cache[worms_key]
+        else:
+            log.info("  [%d/%d] %s", i + 1, len(species_list), entry["common_name"])
+            wd = fetch_worms_record(sci)
+            sea_cache[worms_key] = wd
+            save_json(sea_cache_path, sea_cache)
+            time.sleep(0.35)
+        if wd:
+            worms_hits += 1
+            for f in ("phylum", "class", "order", "family"):
+                if f in wd and f not in entry:
+                    entry[f] = wd[f]
+            if "body_sizes" in wd:
+                entry["body_size"] = wd["body_sizes"][0]
+            if "functional_groups" in wd:
+                entry["functional_group"] = ", ".join(wd["functional_groups"][:3])
+            if "habitats" in wd:
+                entry["habitat"] = ", ".join(wd["habitats"][:4])
+            if "depth" in wd:
+                entry["depth"] = wd["depth"]
+            if "distribution" in wd:
+                entry["distribution"] = ", ".join(wd["distribution"])
+    log.info("  WoRMS data for %d / %d species", worms_hits, len(species_list))
 
     if not cfg.get("skip_images"):
         log.info("\nDownloading sea life images...")
@@ -1957,12 +2062,45 @@ def build_sea_life_card(entry: dict, current_month_0: int, cfg: dict) -> str:
     desc_source = entry.get("desc_source", "")
     if desc_source:
         meta_tags += f'<span class="meta-tag">{esc(desc_source)}</span>'
+    if entry.get("family"):
+        meta_tags += f'<span class="meta-tag">{esc(entry["family"])}</span>'
 
     seas = entry.get("seasonality", [0] * 12)
     apr_may = 1 if (month_level(seas, 3) > 0 or month_level(seas, 4) > 0) else 0
 
     group_label = esc(entry.get("group", ""))
-    family_tag = f'<div class="family-label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:500;margin-bottom:2px">{group_label}</div>' if group_label else ""
+    taxonomy_parts = []
+    for rank in ("phylum", "class", "order"):
+        val = entry.get(rank)
+        if val:
+            taxonomy_parts.append(esc(val))
+    taxonomy_str = " · ".join(taxonomy_parts) if taxonomy_parts else ""
+    family_tag = ""
+    if taxonomy_str:
+        family_tag = (f'<div class="family-label" style="font-size:10px;color:var(--muted);'
+                      f'text-transform:uppercase;letter-spacing:.5px;font-weight:500;'
+                      f'margin-bottom:2px">{taxonomy_str}</div>')
+    elif group_label:
+        family_tag = (f'<div class="family-label" style="font-size:10px;color:var(--muted);'
+                      f'text-transform:uppercase;letter-spacing:.5px;font-weight:500;'
+                      f'margin-bottom:2px">{group_label}</div>')
+
+    details_parts = []
+    if entry.get("body_size"):
+        details_parts.append(f"<strong>Size:</strong> {esc(entry['body_size'])}")
+    if entry.get("habitat"):
+        details_parts.append(f"<strong>Habitat:</strong> {esc(entry['habitat'])}")
+    if entry.get("depth"):
+        details_parts.append(f"<strong>Depth:</strong> {esc(entry['depth'])} m")
+    if entry.get("functional_group"):
+        details_parts.append(f"<strong>Ecology:</strong> {esc(entry['functional_group'])}")
+    if entry.get("distribution"):
+        details_parts.append(f"<strong>Range:</strong> {esc(entry['distribution'])}")
+    details_html = ""
+    if details_parts:
+        details_html = ('<div class="field-ids">'
+                        + "".join(f'<div class="field-id">{p}</div>' for p in details_parts)
+                        + '</div>')
 
     return f"""<div class="bird-card" data-apr-may="{apr_may}">
 <div class="card-image">{layer1}{layer2}{flip_btn}</div>
@@ -1975,6 +2113,7 @@ def build_sea_life_card(entry: dict, current_month_0: int, cfg: dict) -> str:
 {season_html}
 <div class="meta-row">{meta_tags}</div>
 {"<p class='description'>" + desc + "</p>" if desc else ""}
+{details_html}
 </div>
 </div>"""
 
