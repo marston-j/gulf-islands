@@ -20,7 +20,7 @@ Produces:
 
 Usage:
   python3 field_checklist.py \\
-    --place "Grayton Beach Florida" \\
+    --place "Gulf Islands" \\
     --date 2026-04-28 \\
     --lat 30.3298 --lng -86.1650 \\
     --ebird-key YOUR_KEY
