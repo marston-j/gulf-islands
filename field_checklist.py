@@ -822,7 +822,10 @@ def scrape_mobot(genus: str, species_epithet: str) -> dict:
 
 def scrape_wikipedia(sci_name: str, sentences: int = 5,
                      max_chars: int = 800) -> dict:
-    """Fetch a plain-text intro extract from Wikipedia (species, then genus)."""
+    """Fetch a plain-text intro extract from Wikipedia (species, then genus).
+
+    Set sentences=0 to fetch the full intro without a sentence limit.
+    """
     info = {"facts": "", "source": "Wikipedia"}
 
     for title in [sci_name, sci_name.split()[0] if " " in sci_name else None]:
@@ -831,9 +834,11 @@ def scrape_wikipedia(sci_name: str, sentences: int = 5,
         params = {
             "action": "query", "titles": title, "prop": "extracts",
             "exintro": "true", "explaintext": "true",
-            "exsentences": str(sentences if title == sci_name else 3),
             "redirects": "1", "format": "json",
         }
+        sen = sentences if title == sci_name else 3
+        if sen > 0:
+            params["exsentences"] = str(sen)
         try:
             resp = requests.get(
                 "https://en.wikipedia.org/w/api.php", params=params,
@@ -1011,83 +1016,130 @@ def format_tide_html(predictions: list[dict], station_name: str) -> str:
     )
 
 
+USNO_MOON_API = "https://aa.usno.navy.mil/api/moon/phases/year"
+
+PHASE_FRACTION = {
+    "New Moon": 0.0,
+    "First Quarter": 0.25,
+    "Full Moon": 0.5,
+    "Last Quarter": 0.75,
+}
+
+
+def _fetch_usno_phases(year: int) -> list[dict]:
+    """Fetch primary moon phases for *year* from USNO API."""
+    try:
+        r = requests.get(USNO_MOON_API, params={"year": year},
+                         headers=HEADERS, timeout=20)
+        r.raise_for_status()
+        return r.json().get("phasedata", [])
+    except Exception as exc:
+        log.warning("USNO moon API failed for %d: %s", year, exc)
+        return []
+
+
 def compute_moon_phases(start_date: str, end_date: str) -> str:
-    """Compute moon phases for date range and return inline SVG icons."""
-    from datetime import datetime, timedelta
+    """Fetch actual USNO moon-phase dates, interpolate daily illumination,
+    and return inline SVG icons for each day in the range."""
+    from datetime import datetime, timedelta, date
     import math
 
-    _NEW_MOON_JDE = 2451550.1   # 2000-01-06 ~18:14 UTC
-    _SYNODIC = 29.530588853
-
-    def _jd(year, month, day):
-        """Julian Day for 0h UT (midnight) on Gregorian date."""
-        if month <= 2:
-            year -= 1
-            month += 12
-        A = year // 100
-        B = 2 - A + A // 4
-        return (int(365.25 * (year + 4716))
-                + int(30.6001 * (month + 1))
-                + day + B - 1524.5)
-
-    def moon_phase(year, month, day):
-        """Return lunation fraction 0..1  (0 = new, 0.5 = full)."""
-        jd = _jd(year, month, day)
-        phase = (jd - _NEW_MOON_JDE) / _SYNODIC
-        return phase - math.floor(phase)
-
     try:
-        d0 = datetime.strptime(start_date, "%Y%m%d")
-        d1 = datetime.strptime(end_date, "%Y%m%d")
+        d0 = datetime.strptime(start_date, "%Y%m%d").date()
+        d1 = datetime.strptime(end_date, "%Y%m%d").date()
     except ValueError:
         return ""
+
+    years = set(range(d0.year, d1.year + 1))
+    raw_phases: list[tuple[date, float]] = []
+    for yr in sorted(years):
+        for pd in _fetch_usno_phases(yr):
+            try:
+                pdate = date(pd["year"], pd["month"], pd["day"])
+                frac = PHASE_FRACTION.get(pd["phase"])
+                if frac is not None:
+                    raw_phases.append((pdate, frac))
+            except (KeyError, ValueError):
+                continue
+
+    raw_phases.sort(key=lambda x: x[0])
+
+    if len(raw_phases) < 2:
+        log.warning("Insufficient USNO phase data, falling back")
+        return ""
+
+    phase_labels: dict[date, str] = {}
+    for pd in raw_phases:
+        for name, frac in PHASE_FRACTION.items():
+            if frac == pd[1]:
+                phase_labels[pd[0]] = name
+                break
+
+    def _interp_phase(d: date) -> float:
+        """Interpolate lunation fraction (0=new, 0.5=full) for date *d*."""
+        for i in range(len(raw_phases) - 1):
+            da, fa = raw_phases[i]
+            db, fb = raw_phases[i + 1]
+            if da <= d <= db:
+                span = (db - da).days or 1
+                t = (d - da).days / span
+                diff = fb - fa
+                if diff < -0.5:
+                    diff += 1.0
+                elif diff > 0.5:
+                    diff -= 1.0
+                val = fa + t * diff
+                return val % 1.0
+        if d <= raw_phases[0][0]:
+            return raw_phases[0][1]
+        return raw_phases[-1][1]
+
+    def _moon_svg(phase_frac: float, r: int = 12, cx: int = 14, cy: int = 14) -> str:
+        illum = 0.5 * (1 - math.cos(2 * math.pi * phase_frac))
+        if illum < 0.02:
+            return f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="#222" stroke="#555" stroke-width="0.5"/>'
+        if illum > 0.98:
+            return f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="#F5E6B8" stroke="#DAC68D" stroke-width="0.5"/>'
+        waning = phase_frac > 0.5
+        f_val = abs(2 * illum - 1)
+        sweep_outer = "0" if waning else "1"
+        dx = r * f_val
+        sweep_inner = ("1" if waning else "0") if illum < 0.5 else ("0" if waning else "1")
+        return (
+            f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="#F5E6B8" stroke="#DAC68D" stroke-width="0.5"/>'
+            f'<path d="M{cx},{cy - r} '
+            f'A{r},{r} 0 0,{sweep_outer} {cx},{cy + r} '
+            f'A{dx:.1f},{r} 0 0,{sweep_inner} {cx},{cy - r}" fill="#222"/>'
+        )
 
     icons = []
     d = d0
     while d <= d1:
-        p = moon_phase(d.year, d.month, d.day)
-        illum = 0.5 * (1 - math.cos(2 * math.pi * p))
-        lbl = d.strftime("%b %d")
-
-        r = 10
-        cx, cy = 12, 12
-        if illum < 0.02:
-            phase_name = "New"
-            moon_svg = (f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="#333" stroke="#666" stroke-width="0.5"/>')
-        elif illum > 0.98:
-            phase_name = "Full"
-            moon_svg = (f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="#F5E6B8" stroke="#ccc" stroke-width="0.5"/>')
-        else:
-            waning = p > 0.5
-            f_val = abs(2 * illum - 1)
-            sweep_outer = "0" if waning else "1"
-            dx = r * f_val
-            if illum < 0.5:
-                sweep_inner = "1" if waning else "0"
-            else:
-                sweep_inner = "0" if waning else "1"
-            moon_svg = (
-                f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="#F5E6B8" stroke="#ccc" stroke-width="0.5"/>'
-                f'<path d="M{cx},{cy - r} '
-                f'A{r},{r} 0 0,{sweep_outer} {cx},{cy + r} '
-                f'A{dx:.1f},{r} 0 0,{sweep_inner} {cx},{cy - r}" fill="#333"/>'
-            )
-            phase_name = ""
-
+        p = _interp_phase(d)
+        lbl = d.strftime("%b %-d")
+        phase_name = phase_labels.get(d, "")
+        name_html = (f'<div style="font-size:7px;color:#666;font-weight:600;'
+                     f'margin-top:0">{phase_name}</div>' if phase_name else "")
         icons.append(
-            f'<div style="text-align:center;flex-shrink:0">'
-            f'<svg width="24" height="24" viewBox="0 0 24 24">{moon_svg}</svg>'
+            f'<div style="text-align:center;flex-shrink:0;width:34px">'
+            f'<svg width="28" height="28" viewBox="0 0 28 28">{_moon_svg(p)}</svg>'
             f'<div style="font-size:8px;color:#999;margin-top:1px">{lbl}</div>'
-            f'</div>'
+            f'{name_html}</div>'
         )
         d += timedelta(days=1)
 
     if not icons:
         return ""
+
+    log.info("  USNO moon phases: %d days rendered, %d primary phases in range",
+             len(icons), sum(1 for d2 in phase_labels if d0 <= d2 <= d1))
+
     return (
-        '<div style="margin:10px 0;max-width:940px">'
-        '<div style="font-size:14px;font-weight:600;margin-bottom:4px;color:#555">Moon Phases</div>'
-        '<div style="display:flex;gap:6px;flex-wrap:wrap">'
+        '<div style="margin:10px 0;max-width:960px">'
+        '<div style="font-size:14px;font-weight:600;margin-bottom:6px;color:#555">'
+        'Moon Phases <span style="font-size:10px;font-weight:400;color:#aaa">'
+        '(U.S. Naval Observatory)</span></div>'
+        '<div style="display:flex;gap:4px;flex-wrap:wrap">'
         + "".join(icons)
         + '</div></div>'
     )
@@ -1433,11 +1485,11 @@ def run_plants(cfg: dict) -> list[dict]:
             cache_key = f"wiki_tree_{sci.replace(' ', '_')}"
             log.info("  [%d/%d] %s", i + 1, len(tree_entries), entry["common_name"])
 
-            if cache_key in cache and cache[cache_key].get("facts"):
+            if cache_key in cache and cache[cache_key].get("facts") and len(cache[cache_key]["facts"]) > 500:
                 wp = cache[cache_key]
-                log.info("    (cached)")
+                log.info("    (cached, %d chars)", len(wp["facts"]))
             else:
-                wp = scrape_wikipedia(sci, sentences=8, max_chars=1200)
+                wp = scrape_wikipedia(sci, sentences=0, max_chars=2000)
                 cache[cache_key] = wp
                 save_json(plant_cache_path, cache)
                 time.sleep(0.5)
@@ -1445,7 +1497,7 @@ def run_plants(cfg: dict) -> list[dict]:
             if wp.get("facts"):
                 entry["facts"] = wp["facts"]
                 entry["desc_source"] = "Wikipedia"
-                log.info("    Wikipedia: %s", wp["facts"][:70] + "...")
+                log.info("    Wikipedia (%d chars): %s", len(wp["facts"]), wp["facts"][:70] + "...")
             else:
                 log.info("    No Wikipedia data, keeping Go Botany")
 
@@ -2335,19 +2387,11 @@ def generate_html(birds: list[dict], plants: list[dict], cfg: dict, sea_life=Non
             build_sea_life_card, current_month_0, cfg, "s-",
         )
 
-    trip_items = ""
-    if cfg.get("moon"):
-        trip_items += f'<div class="trip-item"><strong>Moon</strong> {esc(cfg["moon"])}</div>'
-    if cfg.get("tides"):
-        trip_items += f'<div class="trip-item"><strong>Tides</strong> {esc(cfg["tides"])}</div>'
-
-    tide_table = cfg.get("tide_html", "")
     moon_html = cfg.get("moon_html", "")
 
     trip_html = ""
-    if trip_items or tide_table or moon_html:
-        trip_html = (f'<div class="trip-info"><div class="trip-grid">{trip_items}</div>'
-                     f'<div style="display:flex;gap:20px;flex-wrap:wrap">{tide_table}{moon_html}</div></div>')
+    if moon_html:
+        trip_html = f'<div class="trip-info">{moon_html}</div>'
 
     num_modes = sum([has_birds, has_plants, has_sea])
     toggle_html = ""
@@ -2651,19 +2695,10 @@ Example:
     if do_plants:
         sea_life = run_sea_life(cfg)
 
-    if args.tide_station and args.tide_dates:
+    if args.tide_dates:
         parts = args.tide_dates.split(",")
         if len(parts) == 2:
-            station_name = args.tide_station
-            for s in TIDE_STATIONS.values():
-                if s["id"] == args.tide_station:
-                    station_name = s["name"]
-                    break
-            log.info("\nFetching NOAA tide predictions (station %s)...", args.tide_station)
-            preds = fetch_noaa_tides(args.tide_station, parts[0], parts[1])
-            if preds:
-                cfg["tide_html"] = format_tide_html(preds, station_name)
-                log.info("  Got %d tide predictions", len(preds))
+            log.info("\nFetching moon phase data for %s – %s...", parts[0], parts[1])
             cfg["moon_html"] = compute_moon_phases(parts[0], parts[1])
 
     log.info("\n" + "=" * 60)

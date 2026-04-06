@@ -68,7 +68,7 @@ LAYER_DEFS = {
     "forests":     {"label": "State / Nat'l Forests", "color": "#2D5A1E", "on": False},
     "lighthouses": {"label": "Lighthouses",          "color": "#C0392B", "on": True},
     "heritage":    {"label": "Heritage Sites",       "color": "#7A5230", "on": True},
-    "critical_wildlife": {"label": "Protected Wildlife Areas", "color": "#C62828", "on": False},
+    "critical_wildlife": {"label": "Protected Wildlife Areas", "color": "#C62828", "on": True},
     "nerrs":       {"label": "Estuarine Reserves",   "color": "#005F73", "on": False},
     "inat_rare":   {"label": "Rare Species (iNat)",  "color": "#D4380D", "on": False},
     "hotspots":    {"label": "Birding Hotspots",     "color": "#8B4513", "on": True},
@@ -723,6 +723,9 @@ MAP_CSS = """
 .leaflet-popup-content b{font-weight:600}
 .popup-species{color:#1A6B3A;font-weight:500}
 .popup-meta{color:#707070;font-size:11px}
+.leaflet-control-layers-toggle{background-image:none!important;display:flex;align-items:center;justify-content:center;width:36px!important;height:36px!important}
+.leaflet-control-layers-toggle svg{width:20px;height:20px}
+.leaflet-control-layers{border-radius:6px!important;box-shadow:0 2px 8px rgba(0,0,0,.18)!important}
 """
 
 HEAD_CDN = (
@@ -757,6 +760,8 @@ var _map=null,_mapLayers={};
 function initMap(){
   if(_map){_map.invalidateSize();return;}
   _map=L.map('leaflet-map',{zoomControl:true}).setView([__CENTER_LAT__,__CENTER_LNG__],9);
+  var voyager=L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{
+    attribution:'&copy; <a href="https://carto.com/">CARTO</a>',maxZoom:19,subdomains:'abcd'});
   var minimal=L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
     attribution:'CartoDB',maxZoom:19,subdomains:'abcd'});
   var osm=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
@@ -765,8 +770,10 @@ function initMap(){
     attribution:'OpenTopoMap',maxZoom:17});
   var sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{
     attribution:'Esri World Imagery',maxZoom:19});
-  minimal.addTo(_map);
-  L.control.layers({'Minimal':minimal,'Street':osm,'Topo':topo,'Satellite':sat},null,{collapsed:true}).addTo(_map);
+  voyager.addTo(_map);
+  var lc=L.control.layers({'Voyager':voyager,'Minimal':minimal,'Street':osm,'Topo':topo,'Satellite':sat},null,{collapsed:true}).addTo(_map);
+  var tog=document.querySelector('.leaflet-control-layers-toggle');
+  if(tog){tog.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 22 8.5 12 15 2 8.5"/><polyline points="2 12 12 18.5 22 12"/><polyline points="2 15.5 12 22 22 15.5"/></svg>';}
   L.control.scale().addTo(_map);
 
   function ps(c,d){return function(){return{color:c,weight:2,opacity:.8,fillOpacity:.15,dashArray:d||''};};}
