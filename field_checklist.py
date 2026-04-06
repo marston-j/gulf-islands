@@ -115,10 +115,11 @@ PLANT_GROUP_COLORS = {
     "Vines": "#7a5a6a",
 }
 
-SEA_LIFE_GROUP_ORDER = ["Fish", "Mollusks", "Crustaceans", "Jellyfish & Corals", "Echinoderms", "Seaweed & Algae", "Marine Reptiles", "Marine Mammals"]
+SEA_LIFE_GROUP_ORDER = ["Fish", "Shells", "Mollusks", "Crustaceans", "Jellyfish & Corals", "Echinoderms", "Seaweed & Algae", "Marine Reptiles", "Marine Mammals"]
 
 SEA_LIFE_GROUP_COLORS = {
     "Fish": "#2E6B94",
+    "Shells": "#C4956A",
     "Mollusks": "#8B7348",
     "Crustaceans": "#B85C38",
     "Jellyfish & Corals": "#7B5EA7",
@@ -130,7 +131,9 @@ SEA_LIFE_GROUP_COLORS = {
 
 SEA_LIFE_TAXON_IDS = {
     47178: "Fish",
-    47115: "Mollusks",
+    47114: "Shells",            # Gastropoda (sea snails, conchs, whelks)
+    47584: "Shells",            # Bivalvia (clams, oysters, scallops)
+    47115: "Mollusks",          # broader Mollusca (cephalopods, nudibranchs, etc.)
     85493: "Crustaceans",
     47534: "Jellyfish & Corals",
     47549: "Echinoderms",
@@ -907,8 +910,8 @@ def format_tide_html(predictions: list[dict], station_name: str) -> str:
     max_v = max(v for _, v in points)
     v_range = max_v - min_v or 1.0
 
-    W, H = 560, 110
-    PAD_X, PAD_TOP, PAD_BOT = 8, 10, 20
+    W, H = 720, 150
+    PAD_X, PAD_TOP, PAD_BOT = 10, 14, 24
 
     def sx(h: float) -> float:
         return PAD_X + (h / max_h) * (W - 2 * PAD_X)
@@ -950,7 +953,7 @@ def format_tide_html(predictions: list[dict], station_name: str) -> str:
                 f'<line x1="{x:.1f}" y1="{PAD_TOP}" x2="{x:.1f}" y2="{H - PAD_BOT}" '
                 f'stroke="#e0e0e0" stroke-width="0.5" stroke-dasharray="2,2"/>'
                 f'<text x="{x:.1f}" y="{H - 2}" text-anchor="middle" '
-                f'font-size="7" fill="#999">{lb["date"]}</text>'
+                f'font-size="9" fill="#999">{lb["date"]}</text>'
             )
 
     dots = []
@@ -958,16 +961,16 @@ def format_tide_html(predictions: list[dict], station_name: str) -> str:
         x, y = sx(lb["h"]), sy(lb["v"])
         color = "#2E6B94" if lb["type"] == "H" else "#8B7348"
         tip = f'{lb["time"]} {lb["v"]:.1f}ft'
-        ty = y - 5 if lb["type"] == "H" else y + 9
+        ty = y - 7 if lb["type"] == "H" else y + 12
         dots.append(
-            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="2" fill="{color}"/>'
+            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3" fill="{color}"/>'
             f'<text x="{x:.1f}" y="{ty:.1f}" text-anchor="middle" '
-            f'font-size="6.5" fill="{color}">{tip}</text>'
+            f'font-size="9" fill="{color}">{tip}</text>'
         )
 
     svg = (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" '
-        f'style="width:100%;max-width:{W}px;height:auto;display:block;min-height:80px">'
+        f'style="width:100%;max-width:{W}px;height:auto;display:block;min-height:110px">'
         f'{"".join(day_marks)}'
         f'<path d="{fill_d}" fill="rgba(90,158,192,0.08)" stroke="none"/>'
         f'<path d="{path_d}" fill="none" stroke="#5a9ec0" stroke-width="1.5" '
@@ -977,8 +980,8 @@ def format_tide_html(predictions: list[dict], station_name: str) -> str:
     )
 
     return (
-        f'<div class="tide-table" style="margin:10px 0;max-width:600px">'
-        f'<div style="font-size:11px;font-weight:600;margin-bottom:4px;color:#555">'
+        f'<div class="tide-table" style="margin:10px 0;max-width:760px">'
+        f'<div style="font-size:13px;font-weight:600;margin-bottom:4px;color:#555">'
         f'Tides &middot; {esc(station_name)}</div>'
         f'{svg}'
         f'<div style="font-size:8px;color:#bbb;margin-top:2px">'
@@ -1055,8 +1058,8 @@ def compute_moon_phases(start_date: str, end_date: str) -> str:
     if not icons:
         return ""
     return (
-        '<div style="margin:10px 0;max-width:600px">'
-        '<div style="font-size:11px;font-weight:600;margin-bottom:4px;color:#555">Moon Phases</div>'
+        '<div style="margin:10px 0;max-width:760px">'
+        '<div style="font-size:13px;font-weight:600;margin-bottom:4px;color:#555">Moon Phases</div>'
         '<div style="display:flex;gap:6px;flex-wrap:wrap">'
         + "".join(icons)
         + '</div></div>'
@@ -1363,7 +1366,7 @@ def run_plants(cfg: dict) -> list[dict]:
         entry["facts"] = gb.get("facts", "")
         entry["habitat"] = gb.get("habitat", "")
         entry["family"] = gb.get("family", "")
-        entry["conservation"] = gb.get("conservation", "")
+        entry["conservation"] = ""
         entry["desc_source"] = "Go Botany / Native Plant Trust" if gb.get("facts") else ""
 
         if gb.get("facts"):
@@ -1475,7 +1478,7 @@ def run_plants(cfg: dict) -> list[dict]:
             if fam:
                 e["family"] = fam
 
-    log.info("\nStep 2d: Fetching Florida conservation status from iNaturalist...")
+    log.info("\nStep 2d: Fetching Florida/US conservation status from iNaturalist...")
     fl_statuses_fetched = 0
     for i, entry in enumerate(species_list):
         tid = entry.get("taxon_id")
@@ -1498,24 +1501,26 @@ def run_plants(cfg: dict) -> list[dict]:
                 for cs in statuses:
                     place = cs.get("place", {})
                     place_name = place.get("display_name", "") if place else ""
-                    if "Florida" in place_name or "United States" == place_name:
-                        status = cs.get("status", "").upper()
-                        status_name = cs.get("status_name", "")
-                        authority = cs.get("authority", "")
-                        grank = cs.get("grank", "")
-                        iucn = cs.get("iucn", "")
-                        parts = []
-                        if status_name:
-                            parts.append(status_name)
-                        elif status:
-                            parts.append(status)
-                        if grank:
-                            parts.append(f"G-rank: {grank}")
-                        if authority and "Florida" in authority:
-                            parts.append(authority)
-                        if parts:
-                            fl_parts.append(" · ".join(parts))
-                fl_text = "; ".join(fl_parts) if fl_parts else ""
+                    is_florida = "Florida" in place_name
+                    is_us = place_name == "United States"
+                    is_global = not place  # global IUCN
+                    if not (is_florida or is_us or is_global):
+                        continue
+                    status_name = cs.get("status_name", "")
+                    status_code = cs.get("status", "").upper()
+                    authority = cs.get("authority", "")
+                    label = status_name or status_code
+                    if not label:
+                        continue
+                    if is_florida:
+                        fl_parts.insert(0, f"FL: {label}")
+                    elif is_us:
+                        fl_parts.append(f"US: {label}")
+                    elif is_global and authority:
+                        fl_parts.append(f"{authority}: {label}")
+                    else:
+                        fl_parts.append(label)
+                fl_text = " · ".join(fl_parts) if fl_parts else ""
                 cache[cache_key] = fl_text
                 save_json(plant_cache_path, cache)
                 if fl_text:
@@ -1525,7 +1530,7 @@ def run_plants(cfg: dict) -> list[dict]:
         except Exception:
             cache[cache_key] = ""
             save_json(plant_cache_path, cache)
-    log.info("  Found Florida status for %d species", fl_statuses_fetched)
+    log.info("  Found Florida/US status for %d species", fl_statuses_fetched)
 
     for entry in species_list:
         inat_fam = inat_families.get(entry.get("taxon_id", 0), "")
@@ -1705,6 +1710,34 @@ def run_sea_life(cfg: dict) -> list[dict]:
         save_json(seasonality_path, seasonality)
         time.sleep(0.3)
 
+    sea_cache_path = cfg["output_dir"] / ".sea_cache.json"
+    sea_cache = load_json(sea_cache_path)
+    log.info("\nFetching Wikipedia descriptions for sea life...")
+    for i, entry in enumerate(species_list):
+        sci = entry["scientific_name"]
+        cache_key = f"wiki_{sci.replace(' ', '_')}"
+        if cache_key in sea_cache and sea_cache[cache_key].get("facts"):
+            entry["facts"] = sea_cache[cache_key]["facts"]
+            entry["desc_source"] = "Wikipedia"
+            continue
+        if cache_key in sea_cache:
+            entry["facts"] = ""
+            entry["desc_source"] = ""
+            continue
+        log.info("  [%d/%d] %s", i + 1, len(species_list), entry["common_name"])
+        wp = scrape_wikipedia(sci)
+        sea_cache[cache_key] = wp
+        save_json(sea_cache_path, sea_cache)
+        if wp.get("facts"):
+            entry["facts"] = wp["facts"]
+            entry["desc_source"] = "Wikipedia"
+            log.info("    Wikipedia: %s", wp["facts"][:70] + "...")
+        else:
+            entry["facts"] = ""
+            entry["desc_source"] = ""
+            log.info("    No Wikipedia data")
+        time.sleep(0.5)
+
     if not cfg.get("skip_images"):
         log.info("\nDownloading sea life images...")
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -1772,6 +1805,7 @@ def run_sea_life(cfg: dict) -> list[dict]:
 def build_sea_life_card(entry: dict, current_month_0: int, cfg: dict) -> str:
     name = esc(title_case_common_name(entry.get("common_name", "")))
     sci = esc(entry.get("scientific_name", ""))
+    desc = esc(entry.get("facts", ""))
     inat_count = entry.get("inat_count", 0)
 
     img1 = entry.get("image_1", "")
@@ -1793,6 +1827,9 @@ def build_sea_life_card(entry: dict, current_month_0: int, cfg: dict) -> str:
     meta_tags = ""
     if inat_count:
         meta_tags += f'<span class="meta-tag">iNat: {inat_count} obs</span>'
+    desc_source = entry.get("desc_source", "")
+    if desc_source:
+        meta_tags += f'<span class="meta-tag">{esc(desc_source)}</span>'
 
     seas = entry.get("seasonality", [0] * 12)
     apr_may = 1 if (month_level(seas, 3) > 0 or month_level(seas, 4) > 0) else 0
@@ -1810,6 +1847,7 @@ def build_sea_life_card(entry: dict, current_month_0: int, cfg: dict) -> str:
 </div>
 {season_html}
 <div class="meta-row">{meta_tags}</div>
+{"<p class='description'>" + desc + "</p>" if desc else ""}
 </div>
 </div>"""
 
@@ -1828,7 +1866,7 @@ a{color:inherit;text-decoration:none}
 .sidebar-head .subtitle{font-size:11px;color:var(--muted);margin-top:3px;letter-spacing:.4px;text-transform:uppercase}
 .sidebar-head .date{font-size:11px;color:var(--muted);margin-top:5px;font-family:'IBM Plex Mono',monospace}
 .sidebar-head .stat{font-size:11px;color:var(--muted);margin-top:3px}
-.mode-toggle{display:flex;margin:12px 16px;border:1px solid var(--border);overflow:hidden}
+.mode-toggle{display:grid;grid-template-columns:1fr 1fr;margin:12px 16px;border:1px solid var(--border);overflow:hidden}
 .mode-btn{flex:1;padding:7px 0;font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;text-align:center;cursor:pointer;border:none;background:transparent;color:var(--muted);font-family:'IBM Plex Sans','Helvetica Neue',system-ui,sans-serif;transition:background .2s,color .2s}
 .mode-btn.active{background:var(--text);color:#fff}
 .nav-links{padding:12px 8px}
