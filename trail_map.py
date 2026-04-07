@@ -723,8 +723,8 @@ MAP_CSS = """
 .leaflet-popup-content b{font-weight:600}
 .popup-species{color:#1A6B3A;font-weight:500}
 .popup-meta{color:#707070;font-size:11px}
-.leaflet-control-layers-toggle{background-image:none!important;display:flex;align-items:center;justify-content:center;width:36px!important;height:36px!important}
-.leaflet-control-layers-toggle svg{width:20px;height:20px}
+.leaflet-control-layers-toggle{background-image:none!important;background-size:0!important;display:flex!important;align-items:center!important;justify-content:center!important;width:36px!important;height:36px!important;padding:0!important;margin:0!important}
+.leaflet-control-layers-toggle svg{width:20px;height:20px;display:block}
 .leaflet-control-layers{border-radius:6px!important;box-shadow:0 2px 8px rgba(0,0,0,.18)!important}
 """
 
