@@ -778,8 +778,11 @@ function initMap(){
   if(tog){tog.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 22 8.5 12 15 2 8.5"/><polyline points="2 12 12 18.5 22 12"/><polyline points="2 15.5 12 22 22 15.5"/></svg>';}
   L.control.scale().addTo(_map);
 
-  function ps(c,d){return function(){return{color:c,weight:2,opacity:.8,fillOpacity:.15,dashArray:d||''};};}
-  function cm(c,r){return function(f,ll){return L.circleMarker(ll,{radius:r||5,fillColor:c,color:'#333',weight:1,fillOpacity:.85});};}
+  var areaPane=_map.createPane('areas');areaPane.style.zIndex=350;
+  var markerPane=_map.createPane('markers');markerPane.style.zIndex=450;
+
+  function ps(c,d){return function(){return{color:c,weight:2,opacity:.8,fillOpacity:.15,dashArray:d||'',pane:'areas'};};}
+  function cm(c,r){return function(f,ll){return L.circleMarker(ll,{radius:r||5,fillColor:c,color:'#333',weight:1,fillOpacity:.85,pane:'markers'});};}
   function bp(ly,fn){ly.eachLayer(function(l){var p=l.feature&&l.feature.properties;if(p)l.bindPopup(fn(p));});}
   function nm(p){return '<b>'+(p.name||'Unnamed')+'</b>';}
 
@@ -789,7 +792,7 @@ function initMap(){
   _mapLayers.bike=L.geoJSON(mapData_bike,{style:ps('#2E6B94')});
   bp(_mapLayers.bike,function(p){return '<b>'+(p.name||'Bike Route')+'</b>';});
 
-  function beachStyle(color){return function(){return{color:color,weight:3,opacity:.8,fillOpacity:.2};};}
+  function beachStyle(color){return function(){return{color:color,weight:3,opacity:.8,fillOpacity:.2,pane:'areas'};};}
   function beachPopup(f,layer){
     var p=f.properties;
     var s='<b>'+(p.name||'Beach')+'</b>';
@@ -818,7 +821,7 @@ function initMap(){
 
   _mapLayers.lighthouses=L.geoJSON(mapData_lighthouses,{
     pointToLayer:function(f,ll){
-      return L.marker(ll,{icon:L.divIcon({className:'',
+      return L.marker(ll,{pane:'markers',icon:L.divIcon({className:'',
         html:'<svg width="20" height="20" viewBox="0 0 20 20"><polygon points="10,1 13,8 10,6 7,8" fill="#C0392B"/><rect x="8" y="8" width="4" height="10" fill="#C0392B"/></svg>',
         iconSize:[20,20],iconAnchor:[10,18]})});
     },
@@ -832,14 +835,14 @@ function initMap(){
       if(p._source==='nrhp'){
         var nhl=p.nhl;
         return L.circleMarker(ll,{radius:nhl?8:5,fillColor:nhl?'#FFD700':'#9B2335',
-          color:nhl?'#8B6914':'#333',weight:nhl?2:1,fillOpacity:.9});
+          color:nhl?'#8B6914':'#333',weight:nhl?2:1,fillOpacity:.9,pane:'markers'});
       }
-      return L.circleMarker(ll,{radius:5,fillColor:'#7A5230',color:'#333',weight:1,fillOpacity:.85});
+      return L.circleMarker(ll,{radius:5,fillColor:'#7A5230',color:'#333',weight:1,fillOpacity:.85,pane:'markers'});
     },
     style:function(f){
       var p=f.properties;
-      if(p._source==='nrhp')return{color:'#9B2335',weight:2,opacity:.8,fillOpacity:.15,dashArray:'4 4'};
-      return{color:'#7A5230',weight:2,opacity:.8,fillOpacity:.15};
+      if(p._source==='nrhp')return{color:'#9B2335',weight:2,opacity:.8,fillOpacity:.15,dashArray:'4 4',pane:'areas'};
+      return{color:'#7A5230',weight:2,opacity:.8,fillOpacity:.15,pane:'areas'};
     },
     onEachFeature:function(f,layer){
       var p=f.properties,s='<div style="max-width:300px">';
@@ -873,7 +876,7 @@ function initMap(){
 
   _mapLayers.critical_wildlife=L.geoJSON(mapData_critical_wildlife,{
     style:ps('#C62828','4 4'),
-    pointToLayer:function(f,ll){return L.circleMarker(ll,{radius:7,fillColor:'#C62828',color:'#fff',weight:2,fillOpacity:.9});}
+    pointToLayer:function(f,ll){return L.circleMarker(ll,{radius:7,fillColor:'#C62828',color:'#fff',weight:2,fillOpacity:.9,pane:'markers'});}
   });
   bp(_mapLayers.critical_wildlife,function(p){var s='<b style="font-size:14px">'+(p.name||'Protected Area')+'</b>';if(p.protection_title)s+='<br><span style="font-size:12px;color:#444">'+p.protection_title+'</span>';if(p.protect_class){var cls={'1':'Strict Nature Reserve','1a':'Strict Nature Reserve','1b':'Wilderness Area','2':'National Park','3':'Natural Monument','4':'Habitat/Species Management'};s+='<br><span style="font-size:11px;color:#555">IUCN Category '+(cls[p.protect_class]||p.protect_class)+' (Class '+p.protect_class+')</span>';}if(p.operator)s+='<br><span style="font-size:11px;color:#666">Managed by '+p.operator+'</span>';if(p.ownership)s+='<br><span style="font-size:11px;color:#666">Ownership: '+p.ownership+'</span>';if(p.opening_hours)s+='<br><span style="font-size:11px;color:#666">Hours: '+p.opening_hours+'</span>';var links=[];if(p.website)links.push('<a href="'+p.website+'" target="_blank" rel="noopener" style="font-size:11px;color:#2E6B94">Official site &#8599;</a>');if(p.wikipedia){var wp=p.wikipedia.replace(/^en:/,'');links.push('<a href="https://en.wikipedia.org/wiki/'+encodeURIComponent(wp)+'" target="_blank" rel="noopener" style="font-size:11px;color:#2E6B94">Wikipedia &#8599;</a>');}else if(p.wikidata){links.push('<a href="https://www.wikidata.org/wiki/'+p.wikidata+'" target="_blank" rel="noopener" style="font-size:11px;color:#2E6B94">Wikidata &#8599;</a>');}if(links.length)s+='<br><div style="margin-top:4px;display:flex;gap:10px">'+links.join('')+'</div>';return s;});
 
@@ -881,12 +884,12 @@ function initMap(){
   bp(_mapLayers.nerrs,function(p){return '<b>'+(p.name||'Estuarine Reserve')+'</b>'+(p.protection_title?'<br>'+p.protection_title:'');});
 
   _mapLayers.inat_rare=L.geoJSON(mapData_inat_rare,{
-    pointToLayer:function(f,ll){return L.circleMarker(ll,{radius:6,fillColor:'#D4380D',color:'#fff',weight:2,fillOpacity:.9});}
+    pointToLayer:function(f,ll){return L.circleMarker(ll,{radius:6,fillColor:'#D4380D',color:'#fff',weight:2,fillOpacity:.9,pane:'markers'});}
   });
   bp(_mapLayers.inat_rare,function(p){var s='<b>'+(p.name||p.sciName)+'</b>';if(p.sciName)s+='<br><i style="color:#666">'+p.sciName+'</i>';if(p.status)s+='<br><span style="color:#D4380D;font-weight:600;font-size:11px">'+p.status+'</span>';if(p.observedOn)s+='<br><span class="popup-meta">Observed: '+p.observedOn+'</span>';if(p.uri)s+='<br><a href="'+p.uri+'" target="_blank" style="font-size:11px">View on iNaturalist</a>';return s;});
 
   _mapLayers.hotspots=L.geoJSON(mapData_hotspots,{
-    pointToLayer:function(f,ll){return L.circleMarker(ll,{radius:7,fillColor:'#8B4513',color:'#fff',weight:2,fillOpacity:.9});}
+    pointToLayer:function(f,ll){return L.circleMarker(ll,{radius:7,fillColor:'#8B4513',color:'#fff',weight:2,fillOpacity:.9,pane:'markers'});}
   });
   bp(_mapLayers.hotspots,function(p){return '<b>'+p.name+'</b><br><span class="popup-meta">'+p.numSpecies+' species all-time'+(p.latestObs?'<br>Latest: '+p.latestObs:'')+'</span>';});
 
@@ -894,7 +897,7 @@ function initMap(){
     iconCreateFunction:function(c){var n=c.getChildCount(),sz=n<20?'small':n<100?'medium':'large';
       return L.divIcon({html:'<div><span>'+n+'</span></div>',className:'marker-cluster marker-cluster-'+sz,iconSize:L.point(40,40)});}});
   L.geoJSON(mapData_ebird_obs,{
-    pointToLayer:function(f,ll){return L.circleMarker(ll,{radius:4,fillColor:'#1A6B3A',color:'#fff',weight:1,fillOpacity:.8});},
+    pointToLayer:function(f,ll){return L.circleMarker(ll,{radius:4,fillColor:'#1A6B3A',color:'#fff',weight:1,fillOpacity:.8,pane:'markers'});},
     onEachFeature:function(f,layer){
       var p=f.properties;
       if(p.species_list){
