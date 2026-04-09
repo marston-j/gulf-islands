@@ -1051,14 +1051,18 @@ def inject_map_tab(target: Path, parts: dict):
 
     html = html.replace("</main>", parts["panel_html"] + "\n</main>", 1)
 
-    # Inject map data and init function into existing script block.
-    # Use string find/replace instead of regex to avoid issues with
-    # Unicode escapes in map data conflicting with regex replacement.
-    marker = "document.addEventListener('DOMContentLoaded',initAprMay)"
-    idx = html.find(marker)
-    if idx == -1:
-        marker = "document.addEventListener('DOMContentLoaded', initAprMay)"
+    # Inject map data and init function before the DOMContentLoaded handler.
+    markers = [
+        "document.addEventListener('DOMContentLoaded',initAprMay)",
+        "document.addEventListener('DOMContentLoaded', initAprMay)",
+        "document.addEventListener('DOMContentLoaded',function(){",
+        "document.addEventListener('DOMContentLoaded',function (){",
+    ]
+    idx = -1
+    for marker in markers:
         idx = html.find(marker)
+        if idx >= 0:
+            break
     if idx >= 0:
         map_inject = parts["data_script"] + "\n" + parts["init_js"] + "\n"
         html = html[:idx] + map_inject + "\n" + html[idx:]

@@ -1243,6 +1243,150 @@ def compute_moon_phases(start_date: str, end_date: str) -> str:
     )
 
 
+BEAUFORT_SCALE = [
+    (1, "Calm"),       (3, "Light"),     (7, "Light"),
+    (12, "Gentle"),    (18, "Moderate"), (24, "Fresh"),
+    (31, "Strong"),    (38, "Near Gale"), (46, "Gale"),
+    (54, "Strong Gale"), (63, "Storm"),  (72, "Violent Storm"),
+    (999, "Hurricane"),
+]
+
+WMO_WEATHER = {
+    0: ("Clear", "\u2600\ufe0f"),
+    1: ("Mostly Clear", "\U0001f324\ufe0f"),
+    2: ("Partly Cloudy", "\u26c5"),
+    3: ("Overcast", "\u2601\ufe0f"),
+    45: ("Fog", "\U0001f32b\ufe0f"),
+    48: ("Rime Fog", "\U0001f32b\ufe0f"),
+    51: ("Light Drizzle", "\U0001f326\ufe0f"),
+    53: ("Drizzle", "\U0001f326\ufe0f"),
+    55: ("Heavy Drizzle", "\U0001f326\ufe0f"),
+    61: ("Light Rain", "\U0001f327\ufe0f"),
+    63: ("Rain", "\U0001f327\ufe0f"),
+    65: ("Heavy Rain", "\U0001f327\ufe0f"),
+    80: ("Rain Showers", "\U0001f326\ufe0f"),
+    81: ("Mod Rain Showers", "\U0001f327\ufe0f"),
+    82: ("Violent Showers", "\u26c8\ufe0f"),
+    95: ("Thunderstorm", "\u26c8\ufe0f"),
+    96: ("T-Storm w/ Hail", "\u26c8\ufe0f"),
+    99: ("T-Storm w/ Hail", "\u26c8\ufe0f"),
+}
+
+
+def beaufort_label(wind_kmh: float) -> str:
+    for limit, label in BEAUFORT_SCALE:
+        if wind_kmh < limit:
+            return label
+    return "Hurricane"
+
+
+def compute_weather_forecast(lat: float, lng: float,
+                             start_date: str, end_date: str) -> str:
+    """Fetch daily weather from Open-Meteo and return HTML widget.
+
+    Uses forecast_days=16 for maximum range.  When the trip dates exceed
+    the forecast horizon, fetches whatever is available now.
+    """
+    from datetime import datetime as _dt
+    d0 = _dt.strptime(start_date, "%Y%m%d").date()
+    d1 = _dt.strptime(end_date, "%Y%m%d").date()
+
+    url = (
+        f"https://api.open-meteo.com/v1/forecast?"
+        f"latitude={lat}&longitude={lng}"
+        f"&daily=weather_code,temperature_2m_max,temperature_2m_min,"
+        f"wind_speed_10m_max,wind_gusts_10m_max,sunrise,sunset"
+        f"&temperature_unit=fahrenheit&wind_speed_unit=mph"
+        f"&timezone=America%2FChicago"
+        f"&forecast_days=16"
+    )
+
+    try:
+        r = requests.get(url, headers=HEADERS, timeout=15)
+        r.raise_for_status()
+        data = r.json().get("daily", {})
+    except Exception as e:
+        log.warning("Weather fetch failed: %s", e)
+        return ""
+
+    all_dates = data.get("time", [])
+    if not all_dates:
+        return ""
+
+    # Filter to trip date range; if none overlap, use last available days
+    dates = []
+    indices = []
+    for i, ds in enumerate(all_dates):
+        dd = _dt.strptime(ds, "%Y-%m-%d").date()
+        if d0 <= dd <= d1:
+            dates.append(ds)
+            indices.append(i)
+
+    partial_note = ""
+    if not dates and all_dates:
+        # Trip is beyond forecast horizon; show last few available days
+        n = min(len(all_dates), (d1 - d0).days + 1, 8)
+        dates = all_dates[-n:]
+        indices = list(range(len(all_dates) - n, len(all_dates)))
+        partial_note = (
+            '<div style="font-size:10px;color:#999;margin-top:4px">'
+            f'Extended forecast not yet available for {d0.strftime("%b %-d")}–'
+            f'{d1.strftime("%b %-d")}; showing nearest available days.</div>'
+        )
+
+    if not dates:
+        return ""
+
+    codes = data.get("weather_code", [])
+    t_max = data.get("temperature_2m_max", [])
+    t_min = data.get("temperature_2m_min", [])
+    wind_max = data.get("wind_speed_10m_max", [])
+    gusts = data.get("wind_gusts_10m_max", [])
+    sunrise = data.get("sunrise", [])
+    sunset = data.get("sunset", [])
+
+    cards = []
+    for j, d in enumerate(dates):
+        i = indices[j]
+        dd = _dt.strptime(d, "%Y-%m-%d").date()
+        day_label = dd.strftime("%a %b %-d")
+        code = codes[i] if i < len(codes) else 0
+        desc, icon = WMO_WEATHER.get(code, WMO_WEATHER.get(0))
+        hi = f"{t_max[i]:.0f}" if i < len(t_max) and t_max[i] is not None else "—"
+        lo = f"{t_min[i]:.0f}" if i < len(t_min) and t_min[i] is not None else "—"
+        w = wind_max[i] if i < len(wind_max) and wind_max[i] is not None else 0
+        g = gusts[i] if i < len(gusts) and gusts[i] is not None else 0
+        bf = beaufort_label(w * 1.609)  # mph -> km/h
+        sr = sunrise[i].split("T")[1][:5] if i < len(sunrise) and sunrise[i] else "—"
+        ss = sunset[i].split("T")[1][:5] if i < len(sunset) and sunset[i] else "—"
+
+        cards.append(
+            f'<div class="wx-day">'
+            f'<div class="wx-date">{day_label}</div>'
+            f'<div class="wx-icon">{icon}</div>'
+            f'<div class="wx-desc">{desc}</div>'
+            f'<div class="wx-temp">{hi}° / {lo}°F</div>'
+            f'<div class="wx-wind">\U0001f4a8 {w:.0f} mph ({bf})'
+            f'{f", gusts {g:.0f}" if g > w + 2 else ""}</div>'
+            f'<div class="wx-sun">\u2600 {sr} \u2013 {ss}</div>'
+            f'</div>'
+        )
+
+    log.info("  Weather forecast: %d days fetched", len(cards))
+
+    return (
+        '<div class="wx-forecast">'
+        '<div style="font-size:14px;font-weight:600;margin-bottom:6px;color:#555">'
+        'Weather Forecast <span style="font-size:10px;font-weight:400;color:#aaa">'
+        '(Open-Meteo)</span></div>'
+        '<div class="wx-grid">'
+        + "".join(cards)
+        + '</div>'
+        + partial_note
+        + '</div>'
+    )
+
+
 PLANT_REFERENCE_ATTRIBUTION = (
     "Go Botany / Native Plant Trust, USDA PLANTS Database & "
     "National Wetland Plant List, Missouri Botanical Garden Plant Finder, "
@@ -2150,14 +2294,12 @@ CSS = """\
 body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans','Helvetica Neue',system-ui,sans-serif;font-size:15px;line-height:1.6}
 a{color:inherit;text-decoration:none}
 .layout{display:flex;min-height:100vh}
-.sidebar{position:sticky;top:0;height:100vh;width:240px;flex-shrink:0;background:#fafafa;border-right:1px solid var(--border);overflow-y:auto;padding:20px 0}
-.sidebar-head{padding:0 16px 16px;border-bottom:1px solid var(--border)}
-.sidebar-head h1{font-family:'IBM Plex Serif',Georgia,serif;font-size:16px;font-weight:600;line-height:1.3}
-.sidebar-head .subtitle{font-size:11px;color:var(--muted);margin-top:3px;letter-spacing:.4px;text-transform:uppercase}
-.sidebar-head .date{font-size:11px;color:var(--muted);margin-top:5px;font-family:'IBM Plex Mono',monospace}
-.sidebar-head .stat{font-size:11px;color:var(--muted);margin-top:3px}
-.mode-toggle{display:grid;grid-template-columns:1fr 1fr;margin:12px 16px;border:1px solid var(--border);overflow:hidden}
-.mode-btn{flex:1;padding:7px 0;font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;text-align:center;cursor:pointer;border:none;background:transparent;color:var(--muted);font-family:'IBM Plex Sans','Helvetica Neue',system-ui,sans-serif;transition:background .2s,color .2s}
+.sidebar{position:sticky;top:0;height:100vh;width:220px;flex-shrink:0;background:#fafafa;border-right:1px solid var(--border);overflow-y:auto;padding:10px 0}
+.sidebar-head{padding:0 16px 10px}
+.sidebar-head .stat{font-size:11px;color:var(--muted)}
+.mode-toggle{display:flex;margin:0 16px 8px;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.mode-toggle .mode-btn{flex:1}
+.mode-btn{padding:7px 0;font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;text-align:center;cursor:pointer;border:none;background:transparent;color:var(--muted);font-family:'IBM Plex Sans','Helvetica Neue',system-ui,sans-serif;transition:background .2s,color .2s}
 .mode-btn.active{background:var(--text);color:#fff}
 .nav-links{padding:12px 8px}
 .nav-link{display:flex;align-items:center;gap:6px;padding:6px 10px;font-size:12px;font-weight:500;color:var(--muted)}
@@ -2165,13 +2307,22 @@ a{color:inherit;text-decoration:none}
 .nav-link.active{color:var(--text);font-weight:600}
 .nav-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
 .nav-count{margin-left:auto;font-size:10px;opacity:.5}
-.main{flex:1;max-width:1200px;padding:20px 40px 80px}
-.page-header{text-align:left;padding:20px 0 16px;border-bottom:1px solid var(--border);margin-bottom:16px}
-.page-header h1{font-family:'IBM Plex Serif',Georgia,serif;font-size:28px;font-weight:600;letter-spacing:-.2px}
-.page-header .sub{font-size:13px;color:var(--muted);margin-top:4px}
-.page-header .location{font-size:12px;color:var(--muted);margin-top:8px;font-family:'IBM Plex Mono',monospace}
+.main{flex:1;max-width:1200px;padding:8px 40px 80px}
+.page-header{text-align:left;padding:8px 0 12px;border-bottom:1px solid var(--border);margin-bottom:12px}
+.page-header h1{font-family:'IBM Plex Serif',Georgia,serif;font-size:26px;font-weight:600;letter-spacing:-.2px}
+.page-header .sub{font-size:13px;color:var(--muted);margin-top:2px}
+.page-header .meta-line{font-size:12px;color:var(--muted);margin-top:4px;font-family:'IBM Plex Mono',monospace;display:flex;gap:16px;flex-wrap:wrap}
 .page-header .locations{font-size:11px;color:var(--muted);margin-top:3px;letter-spacing:.2px}
-.trip-info{padding:0;margin-bottom:16px}
+.trip-info{padding:0;margin-bottom:12px}
+.wx-forecast{margin-bottom:12px}
+.wx-grid{display:flex;gap:6px;flex-wrap:wrap}
+.wx-day{flex:0 0 auto;width:100px;padding:8px;border:1px solid var(--border);border-radius:6px;text-align:center;font-size:11px;line-height:1.4;background:#fafafa}
+.wx-date{font-weight:600;font-size:11px;margin-bottom:2px}
+.wx-icon{font-size:24px;line-height:1.2}
+.wx-desc{font-size:10px;color:#555;margin-bottom:2px}
+.wx-temp{font-weight:600;font-size:12px;margin-bottom:1px}
+.wx-wind{font-size:9px;color:var(--muted)}
+.wx-sun{font-size:9px;color:var(--muted)}
 .trip-grid{display:flex;gap:20px}
 .trip-item{font-size:12px;line-height:1.5;color:#444}
 .trip-item strong{font-size:12px;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);font-weight:600}
@@ -2554,21 +2705,27 @@ def generate_html(birds: list[dict], plants: list[dict], cfg: dict, sea_life=Non
         )
 
     moon_html = cfg.get("moon_html", "")
+    weather_html = cfg.get("weather_html", "")
 
     trip_html = ""
+    trip_parts = []
+    if weather_html:
+        trip_parts.append(weather_html)
     if moon_html:
-        trip_html = f'<div class="trip-info">{moon_html}</div>'
+        trip_parts.append(moon_html)
+    if trip_parts:
+        trip_html = '<div class="trip-info">' + "".join(trip_parts) + '</div>'
 
     num_modes = sum([has_birds, has_plants, has_sea])
     toggle_html = ""
-    if num_modes > 1:
+    if num_modes > 0:
         btns = []
         if has_birds:
             btns.append('<button class="mode-btn active" id="btn-birds" onclick="switchMode(\'birds\')">Birds</button>')
         if has_plants:
-            btns.append(f'<button class="mode-btn" id="btn-plants" onclick="switchMode(\'plants\')">Plants</button>')
+            btns.append('<button class="mode-btn" id="btn-plants" onclick="switchMode(\'plants\')">Plants</button>')
         if has_sea:
-            btns.append(f'<button class="mode-btn" id="btn-sea" onclick="switchMode(\'sea\')">Sea Life</button>')
+            btns.append('<button class="mode-btn" id="btn-sea" onclick="switchMode(\'sea\')">Sea Life</button>')
         toggle_html = '<div class="mode-toggle">' + "".join(btns) + '</div>'
 
     bird_nav_block = f'<div class="nav-links" id="nav-birds">{bird_nav}</div>' if has_birds else ""
@@ -2601,7 +2758,7 @@ def generate_html(birds: list[dict], plants: list[dict], cfg: dict, sea_life=Non
 <div class="page-header">
 <h1>{esc(cfg['place'])} Bird Checklist</h1>
 <div class="sub">{len(birds)} Species</div>
-<div class="location">{lat_str}, {lng_str}</div>
+<div class="meta-line"><span>{date_str}</span><span>{lat_str}, {lng_str}</span></div>
 <div class="locations">Sources: eBird, Cornell All About Birds, iNaturalist, Wikipedia, NOAA Tides &amp; Currents</div>
 </div>
 {filter_bar}
@@ -2615,7 +2772,7 @@ def generate_html(birds: list[dict], plants: list[dict], cfg: dict, sea_life=Non
 <div class="page-header">
 <h1>{esc(cfg['place'])} Plant Checklist</h1>
 <div class="sub">{len(plants)} Species</div>
-<div class="location">{lat_str}, {lng_str}</div>
+<div class="meta-line"><span>{date_str}</span><span>{lat_str}, {lng_str}</span></div>
 <div class="locations">Sources: iNaturalist, {esc(PLANT_REFERENCE_ATTRIBUTION)}</div>
 </div>
 {filter_bar}
@@ -2629,7 +2786,7 @@ def generate_html(birds: list[dict], plants: list[dict], cfg: dict, sea_life=Non
 <div class="page-header">
 <h1>{esc(cfg['place'])} Sea Life Checklist</h1>
 <div class="sub">{len(sea_life)} Species</div>
-<div class="location">{lat_str}, {lng_str}</div>
+<div class="meta-line"><span>{date_str}</span><span>{lat_str}, {lng_str}</span></div>
 <div class="locations">Sources: iNaturalist</div>
 </div>
 {filter_bar}
@@ -2637,24 +2794,27 @@ def generate_html(birds: list[dict], plants: list[dict], cfg: dict, sea_life=Non
 {sea_cards}
 </div>"""
 
-    switch_js = ""
-    if num_modes > 1:
-        switch_js = f"""
+    switch_js = f"""
 function switchMode(mode){{
   var panels=['birds','plants','sea','map'];
-  var counts={{'birds':'{len(birds)} Bird Species','plants':'{len(plants)} Plant Species','sea':'{len(sea_life)} Sea Life Species','map':'Map'}};
+  var suffixes={{'birds':' Bird Species','plants':' Plant Species','sea':' Sea Life Species'}};
   panels.forEach(function(p){{
     var el=document.getElementById('panel-'+p);if(el){{el.classList.toggle('active',p===mode);el.style.display=p===mode?'block':'none';}}
     var nv=document.getElementById('nav-'+p);if(nv)nv.style.display=p===mode?'':'none';
     var bt=document.getElementById('btn-'+p);if(bt)bt.classList.toggle('active',p===mode);
   }});
-  var st=document.getElementById('stat-text');if(st)st.textContent=counts[mode]||'';
-  if(mode==='map'&&typeof initMap==='function'){{initMap();}}else{{
-    scrollTo({{top:0}});
-    var panel=document.getElementById('panel-'+mode);
-    if(panel){{
-      var btn=panel.querySelector('.filter-btn');
-      if(btn&&!btn.classList.contains('active'))toggleAprMay(btn);
+  if(mode==='map'&&typeof initMap==='function'){{initMap();return;}}
+  scrollTo({{top:0}});
+  var panel=document.getElementById('panel-'+mode);
+  if(panel){{
+    var btn=panel.querySelector('.filter-btn');
+    if(btn&&!btn.classList.contains('active'))toggleAprMay(btn);
+    else{{
+      var total=panel.querySelectorAll('.bird-card:not(.season-hidden)').length;
+      var st=document.getElementById('stat-text');
+      if(st)st.textContent=total+(suffixes[mode]||' Species');
+      var sub=panel.querySelector('.page-header .sub');
+      if(sub)sub.textContent=total+' Species';
     }}
   }}
 }}"""
@@ -2675,9 +2835,6 @@ function switchMode(mode){{
 <div class="layout">
 <nav class="sidebar">
 <div class="sidebar-head">
-<h1>{esc(cfg['place'])}</h1>
-<div class="subtitle">Field Checklist</div>
-<div class="date">{date_str}</div>
 <div class="stat" id="stat-text">{stat_text}</div>
 </div>
 {toggle_html}
@@ -2882,6 +3039,10 @@ Example:
         if len(parts) == 2:
             log.info("\nFetching moon phase data for %s – %s...", parts[0], parts[1])
             cfg["moon_html"] = compute_moon_phases(parts[0], parts[1])
+            log.info("Fetching weather forecast for %s – %s...", parts[0], parts[1])
+            cfg["weather_html"] = compute_weather_forecast(
+                cfg["lat"], cfg["lng"], parts[0], parts[1]
+            )
 
     log.info("\n" + "=" * 60)
     log.info("Generating combined HTML...")
