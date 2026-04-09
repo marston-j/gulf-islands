@@ -1169,9 +1169,16 @@ def compute_moon_phases(start_date: str, end_date: str) -> str:
         return raw_phases[-1][1]
 
     def _moon_svg(phase_frac: float, r: int = 12, cx: int = 14, cy: int = 14) -> str:
-        """Render a moon disc.  Northern-hemisphere convention:
-        waxing = right side lit (dark on left), waning = left side lit (dark on right).
-        phase_frac: 0 = new, 0.25 = first quarter, 0.5 = full, 0.75 = last quarter.
+        """Render moon disc by drawing the lit area on a dark base.
+
+        Northern-hemisphere convention:
+          waxing (0<frac<0.5): right side lit
+          waning (0.5<frac<1): left side lit
+
+        The lit shape is bounded by two arcs from top to bottom:
+          1. A semicircular arc (rx=r) on the lit side
+          2. An elliptical terminator arc (rx=dx) whose sweep depends
+             on whether we are in crescent (<50% lit) or gibbous (>50%)
         """
         illum = 0.5 * (1 - math.cos(2 * math.pi * phase_frac))
         if illum < 0.005:
@@ -1182,26 +1189,25 @@ def compute_moon_phases(start_date: str, end_date: str) -> str:
         waxing = phase_frac <= 0.5
         dx = r * abs(2 * illum - 1)
 
+        top = f"{cx},{cy - r}"
+        bot = f"{cx},{cy + r}"
+
         if waxing:
-            if illum < 0.5:
-                outer_sweep = "0"
-                inner_sweep = "1"
+            semi = f"A{r},{r} 0 0,1 {bot}"
+            if illum <= 0.5:
+                term = f"A{dx:.1f},{r} 0 0,0 {top}"
             else:
-                outer_sweep = "0"
-                inner_sweep = "0"
+                term = f"A{dx:.1f},{r} 0 0,1 {top}"
         else:
-            if illum < 0.5:
-                outer_sweep = "1"
-                inner_sweep = "0"
+            semi = f"A{r},{r} 0 0,0 {bot}"
+            if illum <= 0.5:
+                term = f"A{dx:.1f},{r} 0 0,1 {top}"
             else:
-                outer_sweep = "1"
-                inner_sweep = "1"
+                term = f"A{dx:.1f},{r} 0 0,0 {top}"
 
         return (
-            f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="#F5E6B8" stroke="#DAC68D" stroke-width="0.5"/>'
-            f'<path d="M{cx},{cy - r} '
-            f'A{r},{r} 0 0,{outer_sweep} {cx},{cy + r} '
-            f'A{dx:.1f},{r} 0 0,{inner_sweep} {cx},{cy - r}" fill="#222"/>'
+            f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="#222" stroke="#555" stroke-width="0.5"/>'
+            f'<path d="M{top} {semi} {term}" fill="#F5E6B8"/>'
         )
 
     icons = []
