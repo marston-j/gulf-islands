@@ -2776,11 +2776,13 @@ function toggleAprMay(btn){{
 {switch_js}
 document.addEventListener('DOMContentLoaded',function(){{
   initAprMay();
-  var activePanel=document.querySelector('.panel.active');
-  if(activePanel){{
-    var btn=activePanel.querySelector('.filter-btn');
-    if(btn)toggleAprMay(btn);
-  }}
+  setTimeout(function(){{
+    var activePanel=document.querySelector('.panel.active');
+    if(activePanel){{
+      var btn=activePanel.querySelector('.filter-btn');
+      if(btn)toggleAprMay(btn);
+    }}
+  }},100);
 }});
 </script>
 </body>
