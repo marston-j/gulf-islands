@@ -2165,13 +2165,13 @@ a{color:inherit;text-decoration:none}
 .nav-link.active{color:var(--text);font-weight:600}
 .nav-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
 .nav-count{margin-left:auto;font-size:10px;opacity:.5}
-.main{flex:1;max-width:1200px;padding:32px 40px 80px}
-.page-header{text-align:left;padding:32px 0 28px;border-bottom:1px solid var(--border);margin-bottom:32px}
+.main{flex:1;max-width:1200px;padding:20px 40px 80px}
+.page-header{text-align:left;padding:20px 0 16px;border-bottom:1px solid var(--border);margin-bottom:16px}
 .page-header h1{font-family:'IBM Plex Serif',Georgia,serif;font-size:28px;font-weight:600;letter-spacing:-.2px}
 .page-header .sub{font-size:13px;color:var(--muted);margin-top:4px}
 .page-header .location{font-size:12px;color:var(--muted);margin-top:8px;font-family:'IBM Plex Mono',monospace}
 .page-header .locations{font-size:11px;color:var(--muted);margin-top:3px;letter-spacing:.2px}
-.trip-info{padding:0;margin-bottom:24px}
+.trip-info{padding:0;margin-bottom:16px}
 .trip-grid{display:flex;gap:20px}
 .trip-item{font-size:12px;line-height:1.5;color:#444}
 .trip-item strong{font-size:12px;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);font-weight:600}
@@ -2233,11 +2233,14 @@ a{color:inherit;text-decoration:none}
 .apr-may-badge{display:inline-block;font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;margin-left:6px;vertical-align:middle;letter-spacing:.3px}
 .badge-present{background:#e8f5e9;color:#2e7d32}
 .badge-absent{background:#fce4ec;color:#c62828}
-.filter-bar{display:flex;align-items:center;gap:10px;padding:8px 0;margin-bottom:10px;flex-wrap:wrap}
+.filter-bar{display:flex;align-items:center;gap:10px;padding:6px 0;margin-bottom:8px;flex-wrap:wrap}
 .filter-btn{font-family:'IBM Plex Sans',sans-serif;font-size:12px;padding:4px 12px;border-radius:14px;border:1.5px solid var(--muted);background:none;color:var(--text);cursor:pointer;transition:all .15s}
 .filter-btn:hover{border-color:var(--accent)}
 .filter-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 .bird-card.season-hidden{display:none}
+.season-bar .mo.am-hl{outline:1.5px solid #2e7d32;outline-offset:-1px;border-radius:2px}
+.season-bar .mo.am-hl-l{border-top-right-radius:0;border-bottom-right-radius:0}
+.season-bar .mo.am-hl-r{border-top-left-radius:0;border-bottom-left-radius:0}
 @media(max-width:900px){
   .layout{flex-direction:column}
   .sidebar{position:relative;width:100%;height:auto;border-right:none;border-bottom:1px solid var(--border)}
@@ -2646,7 +2649,14 @@ function switchMode(mode){{
     var bt=document.getElementById('btn-'+p);if(bt)bt.classList.toggle('active',p===mode);
   }});
   var st=document.getElementById('stat-text');if(st)st.textContent=counts[mode]||'';
-  if(mode==='map'&&typeof initMap==='function'){{initMap();}}else{{scrollTo({{top:0}});}}
+  if(mode==='map'&&typeof initMap==='function'){{initMap();}}else{{
+    scrollTo({{top:0}});
+    var panel=document.getElementById('panel-'+mode);
+    if(panel){{
+      var btn=panel.querySelector('.filter-btn');
+      if(btn&&!btn.classList.contains('active'))toggleAprMay(btn);
+    }}
+  }}
 }}"""
 
     html = f"""<!DOCTYPE html>
@@ -2764,7 +2774,14 @@ function toggleAprMay(btn){{
   }}
 }}
 {switch_js}
-document.addEventListener('DOMContentLoaded',initAprMay);
+document.addEventListener('DOMContentLoaded',function(){{
+  initAprMay();
+  var activePanel=document.querySelector('.panel.active');
+  if(activePanel){{
+    var btn=activePanel.querySelector('.filter-btn');
+    if(btn)toggleAprMay(btn);
+  }}
+}});
 </script>
 </body>
 </html>"""
