@@ -68,7 +68,7 @@ LAYER_DEFS = {
     "forests":     {"label": "State / Nat'l Forests", "color": "#2D5A1E", "on": False},
     "lighthouses": {"label": "Lighthouses",          "color": "#C0392B", "on": True},
     "heritage":    {"label": "Heritage Sites",       "color": "#7A5230", "on": True},
-    "critical_wildlife": {"label": "Protected Wildlife Areas", "color": "#C62828", "on": True},
+    "critical_wildlife": {"label": "Protected Areas", "color": "#C62828", "on": True},
     "nerrs":       {"label": "Estuarine Reserves",   "color": "#005F73", "on": False},
     "inat_rare":   {"label": "Rare Species (iNat)",  "color": "#D4380D", "on": False},
     "hotspots":    {"label": "Birding Hotspots",     "color": "#8B4513", "on": True},
@@ -502,9 +502,11 @@ def fetch_critical_wildlife(bbox, cache):
         f'  node["leisure"="bird_hide"]({bb});\n'
         f");\nout body;\n>;\nout skel qt;"
     )
-    return _osm_geojson(q, cache, "critical_wildlife_v2",
+    return _osm_geojson(q, cache, "critical_wildlife_v3",
                         ["name", "protect_class", "protection_title",
-                         "operator", "designation"])
+                         "operator", "designation", "website",
+                         "wikipedia", "wikidata", "opening_hours",
+                         "ownership", "protected_area"])
 
 
 def fetch_nerrs(bbox, cache):
@@ -873,7 +875,7 @@ function initMap(){
     style:ps('#C62828','4 4'),
     pointToLayer:function(f,ll){return L.circleMarker(ll,{radius:7,fillColor:'#C62828',color:'#fff',weight:2,fillOpacity:.9});}
   });
-  bp(_mapLayers.critical_wildlife,function(p){var s='<b>'+(p.name||'Protected Wildlife Area')+'</b>';if(p.protect_class)s+='<br><span style="font-size:11px;color:#555">IUCN Class '+p.protect_class+'</span>';if(p.operator)s+='<br><span style="font-size:10px;color:#666">'+p.operator+'</span>';return s;});
+  bp(_mapLayers.critical_wildlife,function(p){var s='<b style="font-size:14px">'+(p.name||'Protected Area')+'</b>';if(p.protection_title)s+='<br><span style="font-size:12px;color:#444">'+p.protection_title+'</span>';if(p.protect_class){var cls={'1':'Strict Nature Reserve','1a':'Strict Nature Reserve','1b':'Wilderness Area','2':'National Park','3':'Natural Monument','4':'Habitat/Species Management'};s+='<br><span style="font-size:11px;color:#555">IUCN Category '+(cls[p.protect_class]||p.protect_class)+' (Class '+p.protect_class+')</span>';}if(p.operator)s+='<br><span style="font-size:11px;color:#666">Managed by '+p.operator+'</span>';if(p.ownership)s+='<br><span style="font-size:11px;color:#666">Ownership: '+p.ownership+'</span>';if(p.opening_hours)s+='<br><span style="font-size:11px;color:#666">Hours: '+p.opening_hours+'</span>';var links=[];if(p.website)links.push('<a href="'+p.website+'" target="_blank" rel="noopener" style="font-size:11px;color:#2E6B94">Official site &#8599;</a>');if(p.wikipedia){var wp=p.wikipedia.replace(/^en:/,'');links.push('<a href="https://en.wikipedia.org/wiki/'+encodeURIComponent(wp)+'" target="_blank" rel="noopener" style="font-size:11px;color:#2E6B94">Wikipedia &#8599;</a>');}else if(p.wikidata){links.push('<a href="https://www.wikidata.org/wiki/'+p.wikidata+'" target="_blank" rel="noopener" style="font-size:11px;color:#2E6B94">Wikidata &#8599;</a>');}if(links.length)s+='<br><div style="margin-top:4px;display:flex;gap:10px">'+links.join('')+'</div>';return s;});
 
   _mapLayers.nerrs=L.geoJSON(mapData_nerrs,{style:ps('#005F73','4 6')});
   bp(_mapLayers.nerrs,function(p){return '<b>'+(p.name||'Estuarine Reserve')+'</b>'+(p.protection_title?'<br>'+p.protection_title:'');});
