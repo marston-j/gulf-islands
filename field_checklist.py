@@ -2296,7 +2296,6 @@ a{color:inherit;text-decoration:none}
 .layout{display:flex;min-height:100vh}
 .sidebar{position:sticky;top:0;height:100vh;width:220px;flex-shrink:0;background:#fafafa;border-right:1px solid var(--border);overflow-y:auto;padding:10px 0}
 .sidebar-head{padding:0 16px 10px}
-.sidebar-head .stat{font-size:11px;color:var(--muted)}
 .mode-toggle{display:flex;margin:0 16px 8px;border:1px solid var(--border);border-radius:6px;overflow:hidden}
 .mode-toggle .mode-btn{flex:1}
 .mode-btn{padding:7px 0;font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;text-align:center;cursor:pointer;border:none;background:transparent;color:var(--muted);font-family:'IBM Plex Sans','Helvetica Neue',system-ui,sans-serif;transition:background .2s,color .2s}
@@ -2834,9 +2833,6 @@ function switchMode(mode){{
 <body>
 <div class="layout">
 <nav class="sidebar">
-<div class="sidebar-head">
-<div class="stat" id="stat-text">{stat_text}</div>
-</div>
 {toggle_html}
 {bird_nav_block}
 {plant_nav_block}
