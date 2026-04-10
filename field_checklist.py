@@ -116,7 +116,7 @@ PLANT_GROUP_COLORS = {
     "Vines": "#7a5a6a",
 }
 
-SEA_LIFE_GROUP_ORDER = ["Fish", "Shells", "Mollusks", "Crustaceans", "Jellyfish & Corals", "Echinoderms", "Seaweed & Algae", "Marine Reptiles", "Marine Mammals"]
+SEA_LIFE_GROUP_ORDER = ["Crustaceans", "Seaweed & Algae", "Shells", "Fish", "Jellyfish & Corals", "Echinoderms", "Marine Mammals", "Mollusks", "Marine Reptiles"]
 
 SEA_LIFE_GROUP_COLORS = {
     "Fish": "#2E6B94",
@@ -566,9 +566,23 @@ def inat_taxon_photos(taxon_id: int, limit: int = 6) -> list[str]:
             url = tp.get("photo", {}).get("medium_url") or tp.get("photo", {}).get("url", "")
             if url:
                 urls.append(url.replace("/medium.", "/large.").replace("/square.", "/large."))
-        return urls
+        if urls:
+            return urls
     except Exception:
-        return []
+        pass
+    # Fallback: fetch default_photo from the taxa detail endpoint
+    try:
+        resp = requests.get(f"{INAT_API}/taxa/{taxon_id}",
+                            headers=HEADERS, timeout=15)
+        if resp.status_code == 200:
+            for t in resp.json().get("results", []):
+                dp = t.get("default_photo", {})
+                url = dp.get("medium_url") or dp.get("url", "")
+                if url:
+                    return [url.replace("/medium.", "/large.").replace("/square.", "/large.")]
+    except Exception:
+        pass
+    return []
 
 
 def inat_observation_photos(taxon_id: int, lat: float, lng: float,
@@ -2224,6 +2238,41 @@ def run_sea_life(cfg: dict) -> list[dict]:
             entry["common_name"] = vname
             log.info("    %s -> %s", entry["scientific_name"], vname)
 
+    # Resolve OBIS species to iNaturalist taxon IDs for image fetching
+    log.info("\nResolving iNaturalist taxon IDs for OBIS species...")
+    for entry in species_list:
+        if entry.get("data_source") != "OBIS":
+            continue
+        aphia = entry.get("aphia_id")
+        sci = entry["scientific_name"]
+        inat_key = f"obis_inat_{aphia}"
+        if inat_key in sea_cache:
+            inat_tid = sea_cache[inat_key]
+        else:
+            inat_tid = None
+            try:
+                resp = requests.get(
+                    f"{INAT_API}/taxa",
+                    params={"q": sci, "rank": "species", "is_active": "true", "per_page": 5},
+                    headers=HEADERS, timeout=10,
+                )
+                for t in resp.json().get("results", []):
+                    if t.get("name", "").lower() == sci.lower():
+                        inat_tid = t["id"]
+                        break
+                if not inat_tid:
+                    results = resp.json().get("results", [])
+                    if results:
+                        inat_tid = results[0]["id"]
+            except Exception:
+                pass
+            sea_cache[inat_key] = inat_tid
+            save_json(sea_cache_path, sea_cache)
+            time.sleep(0.3)
+        if inat_tid:
+            entry["inat_taxon_id"] = inat_tid
+            log.info("    %s -> iNat %d", sci, inat_tid)
+
     # Disambiguate duplicate common names (genus-only) with species epithet
     name_counts: dict[str, int] = {}
     for entry in species_list:
@@ -2325,7 +2374,7 @@ def run_sea_life(cfg: dict) -> list[dict]:
             log.info("  [%d/%d] %s", i + 1, len(species_list), name)
 
             photo_urls = []
-            tid = entry.get("taxon_id")
+            tid = entry.get("inat_taxon_id") or entry.get("taxon_id")
             if tid:
                 photo_urls.extend(inat_taxon_photos(tid, limit=4))
             if len(photo_urls) < 2 and tid:
@@ -2401,9 +2450,6 @@ def build_sea_life_card(entry: dict, current_month_0: int, cfg: dict) -> str:
     meta_tags = ""
     if inat_count:
         meta_tags += f'<span class="meta-tag">iNat: {inat_count} obs</span>'
-    desc_source = entry.get("desc_source", "")
-    if desc_source:
-        meta_tags += f'<span class="meta-tag">{esc(desc_source)}</span>'
     if entry.get("family"):
         meta_tags += f'<span class="meta-tag">{esc(entry["family"])}</span>'
 
@@ -2472,7 +2518,7 @@ a{color:inherit;text-decoration:none}
 .sidebar-head{padding:0 16px 10px}
 .mode-toggle{display:flex;margin:8px 16px 8px;border:1px solid var(--border);border-radius:6px;overflow:hidden}
 .mode-toggle .mode-btn{flex:1}
-.mode-btn{padding:7px 0;font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;text-align:center;cursor:pointer;border:none;background:transparent;color:var(--muted);font-family:'IBM Plex Sans','Helvetica Neue',system-ui,sans-serif;transition:background .2s,color .2s}
+.mode-btn{padding:7px 0;font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;text-align:center;cursor:pointer;border:none;background:transparent;color:var(--muted);font-family:'IBM Plex Sans','Helvetica Neue',system-ui,sans-serif;transition:background .2s,color .2s}
 .mode-btn.active{background:var(--text);color:#fff}
 .nav-links{padding:12px 8px}
 .nav-link{display:flex;align-items:center;gap:6px;padding:6px 10px;font-size:12px;font-weight:500;color:var(--muted)}
@@ -2898,7 +2944,7 @@ def generate_html(birds: list[dict], plants: list[dict], cfg: dict, sea_life=Non
         if has_plants:
             btns.append('<button class="mode-btn" id="btn-plants" onclick="switchMode(\'plants\')">Plants</button>')
         if has_sea:
-            btns.append('<button class="mode-btn" id="btn-sea" onclick="switchMode(\'sea\')">Sea Life</button>')
+            btns.append('<button class="mode-btn" id="btn-sea" onclick="switchMode(\'sea\')">Sea</button>')
         toggle_html = '<div class="mode-toggle">' + "".join(btns) + '</div>'
 
     bird_nav_block = f'<div class="nav-links" id="nav-birds">{bird_nav}</div>' if has_birds else ""
