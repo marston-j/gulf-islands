@@ -1345,6 +1345,13 @@ def compute_weather_forecast(lat: float, lng: float,
     sunrise = data.get("sunrise", [])
     sunset = data.get("sunset", [])
 
+    def _fmt12(iso_str):
+        hm = iso_str.split("T")[1][:5]
+        h, m = int(hm[:2]), hm[3:]
+        suffix = "am" if h < 12 else "pm"
+        h = h % 12 or 12
+        return f"{h}:{m}{suffix}"
+
     cards = []
     for j, d in enumerate(dates):
         i = indices[j]
@@ -1357,8 +1364,8 @@ def compute_weather_forecast(lat: float, lng: float,
         w = wind_max[i] if i < len(wind_max) and wind_max[i] is not None else 0
         g = gusts[i] if i < len(gusts) and gusts[i] is not None else 0
         bf = beaufort_label(w * 1.609)  # mph -> km/h
-        sr = sunrise[i].split("T")[1][:5] if i < len(sunrise) and sunrise[i] else "—"
-        ss = sunset[i].split("T")[1][:5] if i < len(sunset) and sunset[i] else "—"
+        sr = _fmt12(sunrise[i]) if i < len(sunrise) and sunrise[i] else "—"
+        ss = _fmt12(sunset[i]) if i < len(sunset) and sunset[i] else "—"
 
         cards.append(
             f'<div class="wx-day">'
