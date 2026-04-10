@@ -2296,7 +2296,7 @@ a{color:inherit;text-decoration:none}
 .layout{display:flex;min-height:100vh}
 .sidebar{position:sticky;top:0;height:100vh;width:220px;flex-shrink:0;background:#fafafa;border-right:1px solid var(--border);overflow-y:auto;padding:10px 0}
 .sidebar-head{padding:0 16px 10px}
-.mode-toggle{display:flex;margin:0 16px 8px;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.mode-toggle{display:flex;margin:8px 16px 8px;border:1px solid var(--border);border-radius:6px;overflow:hidden}
 .mode-toggle .mode-btn{flex:1}
 .mode-btn{padding:7px 0;font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;text-align:center;cursor:pointer;border:none;background:transparent;color:var(--muted);font-family:'IBM Plex Sans','Helvetica Neue',system-ui,sans-serif;transition:background .2s,color .2s}
 .mode-btn.active{background:var(--text);color:#fff}
@@ -2708,10 +2708,10 @@ def generate_html(birds: list[dict], plants: list[dict], cfg: dict, sea_life=Non
 
     trip_html = ""
     trip_parts = []
-    if weather_html:
-        trip_parts.append(weather_html)
     if moon_html:
         trip_parts.append(moon_html)
+    if weather_html:
+        trip_parts.append(weather_html)
     if trip_parts:
         trip_html = '<div class="trip-info">' + "".join(trip_parts) + '</div>'
 
