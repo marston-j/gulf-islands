@@ -130,6 +130,40 @@ SEA_LIFE_GROUP_COLORS = {
     "Marine Mammals": "#505060",
 }
 
+SEAWEED_EDIBILITY: dict[str, str] = {
+    "Sargassum fluitans":          "edible",
+    "Gracilaria cervicornis":      "edible",
+    "Gracilaria tikvahiae":        "edible",
+    "Hypnea musciformis":          "edible",
+    "Hypnea spinella":             "edible",
+    "Gelidium crinale":            "edible",
+    "Gelidium pusillum":           "edible",
+    "Gelidium spinosum":           "edible",
+    "Laurencia obtusa":            "edible",
+    "Laurencia intricata":         "not edible",
+    "Acanthophora spicifera":      "edible",
+    "Acanthophora muscoides":      "not edible",
+    "Agardhiella subulata":        "edible",
+    "Champia parvula":             "not edible",
+    "Hildenbrandia rubra":         "not edible",
+    "Amphiroa fragilissima":       "not edible",
+    "Amphiroa tribulus":           "not edible",
+    "Jania adhaerens":             "not edible",
+    "Jania capillacea":            "not edible",
+    "Chondria dasyphylla":         "not edible",
+    "Spyridia filamentosa":        "not edible",
+    "Crouania attenuata":          "not edible",
+    "Erythrocladia irregularis":   "not edible",
+    "Erythrotrichia carnea":       "not edible",
+    "Catenella caespitosa":        "not edible",
+    "Chroodactylon ornatum":       "not edible",
+    "Stylonema alsidii":           "not edible",
+    "Helminthocladia calvadosii":  "not edible",
+    "Trichogloeopsis pedicellata": "not edible",
+    "Bostrychia radicans":         "not edible",
+    "Bostrychia tenella":          "not edible",
+}
+
 SEA_LIFE_TAXON_IDS = {
     47178: "Fish",
     47114: "Shells",            # Gastropoda (sea snails, conchs, whelks)
@@ -2285,6 +2319,12 @@ def run_sea_life(cfg: dict) -> list[dict]:
             if len(parts) >= 2:
                 entry["common_name"] = f"{cn} ({parts[1]})"
 
+    # Tag seaweed species with edibility
+    for entry in species_list:
+        if entry.get("group") == "Seaweed & Algae":
+            sci = entry.get("scientific_name", "")
+            entry["edible"] = SEAWEED_EDIBILITY.get(sci, "")
+
     log.info("\nSea life seasonality from iNaturalist...")
     for i, entry in enumerate(species_list):
         if entry.get("data_source") == "OBIS":
@@ -2452,6 +2492,11 @@ def build_sea_life_card(entry: dict, current_month_0: int, cfg: dict) -> str:
         meta_tags += f'<span class="meta-tag">iNat: {inat_count} obs</span>'
     if entry.get("family"):
         meta_tags += f'<span class="meta-tag">{esc(entry["family"])}</span>'
+    edible = entry.get("edible", "")
+    if edible == "edible":
+        meta_tags += '<span class="meta-tag" style="color:#2d7a3a;border-color:#2d7a3a">Edible</span>'
+    elif edible == "not edible":
+        meta_tags += '<span class="meta-tag" style="color:#999;border-color:#ccc">Not Edible</span>'
 
     seas = entry.get("seasonality", [0] * 12)
     apr_may = 1 if (month_level(seas, 3) > 0 or month_level(seas, 4) > 0) else 0
