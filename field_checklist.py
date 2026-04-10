@@ -933,6 +933,109 @@ def fetch_worms_record(sci_name: str) -> dict:
     return info
 
 
+# ── OBIS API (Ocean Biodiversity Information System) ──────────────────
+
+OBIS_API = "https://api.obis.org/v3"
+
+OBIS_SEAWEED_TAXA = [
+    "Rhodophyta",     # red algae
+    "Phaeophyceae",   # brown algae (class within Ochrophyta)
+    "Chlorophyta",    # green algae
+]
+
+MACROALGAE_CLASSES = {
+    "Florideophyceae", "Bangiophyceae", "Compsopogonophyceae",
+    "Stylonematophyceae",
+    "Phaeophyceae",
+    "Ulvophyceae",
+}
+
+
+def fetch_obis_seaweed(lat: float, lng: float, radius_deg: float = 1.0,
+                       max_species: int = 30, cache: dict | None = None,
+                       cache_path=None) -> list[dict]:
+    """Fetch macroalgae/seaweed species from OBIS for the region.
+
+    Returns a list of dicts with keys matching the sea-life pipeline shape:
+    common_name, scientific_name, group, taxon_id (AphiaID), inat_count, etc.
+    """
+    cache = cache if cache is not None else {}
+    cache_key = f"obis_seaweed_{lat:.2f}_{lng:.2f}_{radius_deg}"
+    if cache_key in cache:
+        log.info("  OBIS seaweed: using cached results (%d species)", len(cache[cache_key]))
+        return cache[cache_key]
+
+    bbox_w = lng - radius_deg
+    bbox_e = lng + radius_deg
+    bbox_s = lat - radius_deg
+    bbox_n = lat + radius_deg
+    wkt = (f"POLYGON(({bbox_w} {bbox_s},{bbox_e} {bbox_s},"
+           f"{bbox_e} {bbox_n},{bbox_w} {bbox_n},{bbox_w} {bbox_s}))")
+
+    all_results = []
+    for taxon_name in OBIS_SEAWEED_TAXA:
+        url = f"{OBIS_API}/checklist"
+        params = {
+            "scientificname": taxon_name,
+            "geometry": wkt,
+            "size": 500,
+        }
+        try:
+            log.info("  OBIS query: %s in bounding box...", taxon_name)
+            resp = requests.get(url, params=params, headers=HEADERS, timeout=30)
+            if resp.status_code != 200:
+                log.warning("  OBIS returned %d for %s", resp.status_code, taxon_name)
+                continue
+            data = resp.json()
+            results = data.get("results", [])
+            log.info("    %d taxa returned for %s", len(results), taxon_name)
+            all_results.extend(results)
+        except Exception as e:
+            log.warning("  OBIS request failed for %s: %s", taxon_name, e)
+        time.sleep(0.3)
+
+    seen: set[str] = set()
+    species_entries = []
+    for rec in all_results:
+        rank = rec.get("taxonRank", "")
+        if rank != "Species":
+            continue
+        sci = rec.get("scientificName", "")
+        if not sci or sci in seen:
+            continue
+        algae_class = rec.get("class", "")
+        if not algae_class or algae_class not in MACROALGAE_CLASSES:
+            continue
+        seen.add(sci)
+        genus = sci.split()[0] if " " in sci else sci
+        species_entries.append({
+            "scientific_name": sci,
+            "common_name": genus,
+            "group": "Seaweed & Algae",
+            "taxon_id": rec.get("taxonID"),
+            "aphia_id": rec.get("taxonID"),
+            "obis_records": rec.get("records", 0),
+            "inat_count": 0,
+            "phylum": rec.get("phylum", ""),
+            "class": rec.get("class", ""),
+            "order": rec.get("order", ""),
+            "family": rec.get("family", ""),
+            "data_source": "OBIS",
+        })
+
+    species_entries.sort(key=lambda e: -e["obis_records"])
+    species_entries = species_entries[:max_species]
+
+    log.info("  OBIS seaweed: %d macroalgae species (capped at %d)",
+             len(species_entries), max_species)
+
+    cache[cache_key] = species_entries
+    if cache_path:
+        save_json(cache_path, cache)
+
+    return species_entries
+
+
 NOAA_COOPS_API = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
 
 # Nearest tide stations by region
@@ -2069,8 +2172,75 @@ def run_sea_life(cfg: dict) -> list[dict]:
             })
         time.sleep(0.5)
 
+    # ── Supplement Seaweed & Algae from OBIS ──────────────────────────
+    sea_cache_path = cfg["output_dir"] / ".sea_cache.json"
+    sea_cache = load_json(sea_cache_path)
+
+    log.info("\nQuerying OBIS for additional Seaweed & Algae species...")
+    obis_species = fetch_obis_seaweed(
+        cfg["lat"], cfg["lng"], radius_deg=1.0, max_species=30,
+        cache=sea_cache, cache_path=sea_cache_path,
+    )
+    obis_added = 0
+    for entry in obis_species:
+        sci = entry["scientific_name"]
+        if sci in seen_species:
+            continue
+        seen_species.add(sci)
+        species_list.append(entry)
+        obis_added += 1
+    log.info("  Added %d new seaweed species from OBIS (total sea life: %d)",
+             obis_added, len(species_list))
+
+    # Resolve common names for OBIS species via WoRMS vernacular names
+    log.info("\nResolving common names for OBIS-sourced seaweed...")
+    for entry in species_list:
+        if entry.get("data_source") != "OBIS":
+            continue
+        aphia = entry.get("aphia_id")
+        if not aphia:
+            continue
+        vern_key = f"obis_vern_{aphia}"
+        if vern_key in sea_cache:
+            vname = sea_cache[vern_key]
+        else:
+            vname = ""
+            try:
+                r = requests.get(
+                    f"{WORMS_API}/AphiaVernacularsByAphiaID/{aphia}",
+                    headers=HEADERS, timeout=10,
+                )
+                if r.status_code == 200:
+                    for vn in r.json():
+                        if vn.get("language_code") == "eng" and vn.get("vernacular"):
+                            vname = vn["vernacular"]
+                            break
+            except Exception:
+                pass
+            sea_cache[vern_key] = vname
+            save_json(sea_cache_path, sea_cache)
+            time.sleep(0.25)
+        if vname:
+            entry["common_name"] = vname
+            log.info("    %s -> %s", entry["scientific_name"], vname)
+
+    # Disambiguate duplicate common names (genus-only) with species epithet
+    name_counts: dict[str, int] = {}
+    for entry in species_list:
+        cn = entry["common_name"]
+        name_counts[cn] = name_counts.get(cn, 0) + 1
+    for entry in species_list:
+        cn = entry["common_name"]
+        if name_counts.get(cn, 0) > 1:
+            parts = entry["scientific_name"].split()
+            if len(parts) >= 2:
+                entry["common_name"] = f"{cn} ({parts[1]})"
+
     log.info("\nSea life seasonality from iNaturalist...")
     for i, entry in enumerate(species_list):
+        if entry.get("data_source") == "OBIS":
+            entry["seasonality"] = [1] * 12
+            continue
         tid = entry.get("taxon_id")
         if not tid:
             entry["seasonality"] = [0] * 12
@@ -2085,9 +2255,6 @@ def run_sea_life(cfg: dict) -> list[dict]:
         entry["seasonality"] = hist
         save_json(seasonality_path, seasonality)
         time.sleep(0.3)
-
-    sea_cache_path = cfg["output_dir"] / ".sea_cache.json"
-    sea_cache = load_json(sea_cache_path)
 
     log.info("\nFetching Wikipedia descriptions for sea life (full intro)...")
     fetched_wp = 0
@@ -2202,7 +2369,7 @@ def run_sea_life(cfg: dict) -> list[dict]:
 
     species_list.sort(key=lambda e: (
         SEA_LIFE_GROUP_ORDER.index(e["group"]) if e["group"] in SEA_LIFE_GROUP_ORDER else 99,
-        -e["inat_count"],
+        -(e.get("inat_count", 0) or e.get("obis_records", 0)),
     ))
 
     log.info("  Total sea life: %d species", len(species_list))
