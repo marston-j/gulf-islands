@@ -35,6 +35,7 @@ import re
 import subprocess
 import sys
 import time
+import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote
@@ -217,6 +218,23 @@ FERN_ANCESTOR_ID = 121943  # Polypodiopsida
 LICHEN_ANCESTOR_ID = 54743  # Lecanoromycetes (lichenized fungi)
 BRYOPHYTE_ANCESTOR_ID = 311295  # Bryophyta (mosses)
 FUNGI_ANCESTOR_ID = 47170  # Fungi
+
+INAT_FAMILY_IDS: dict[int, str] = {
+    47562: "Pinaceae", 47374: "Cupressaceae", 47852: "Fagaceae",
+    48867: "Arecaceae", 53581: "Magnoliaceae", 48809: "Lauraceae",
+    47733: "Oleaceae", 58321: "Sapindaceae", 54497: "Juglandaceae",
+    49155: "Betulaceae", 47851: "Ulmaceae", 50898: "Platanaceae",
+    47855: "Malvaceae", 53566: "Nyssaceae", 56020: "Hamamelidaceae",
+    49159: "Altingiaceae", 47860: "Salicaceae", 51227: "Moraceae",
+    52389: "Simaroubaceae", 48833: "Bignoniaceae", 51771: "Annonaceae",
+    48846: "Rhizophoraceae", 49185: "Clusiaceae", 136334: "Podocarpaceae",
+    48798: "Ericaceae", 50927: "Caprifoliaceae", 48099: "Aquifoliaceae",
+    48862: "Myricaceae", 56058: "Clethraceae", 60771: "Grossulariaceae",
+    48828: "Adoxaceae", 48096: "Cornaceae", 55574: "Cistaceae",
+    49178: "Rubiaceae", 52281: "Verbenaceae",
+    48895: "Vitaceae", 49990: "Smilacaceae", 72736: "Menispermaceae",
+    47706: "Convolvulaceae",
+}
 
 logging.basicConfig(
     level=logging.INFO,
@@ -721,7 +739,9 @@ def scrape_gobotany(genus: str, species_epithet: str) -> dict:
 
     m = re.search(r"Conservation status</h3>(.*?)(?=<h3|</div>\s*</div>)", html, re.DOTALL)
     if m:
-        info["conservation"] = strip_tags(m.group(1))[:300]
+        raw = strip_tags(m.group(1))
+        raw = re.sub(r"(?i)exact status definitions.*?check with your state\.?\s*", "", raw)
+        info["conservation"] = raw.strip()[:300]
 
     m = re.search(r"Growth form</dt>(.*?)(?=</dd>|<dt)", html, re.DOTALL | re.IGNORECASE)
     if not m:
@@ -865,6 +885,179 @@ def scrape_mobot(genus: str, species_epithet: str) -> dict:
     if m:
         info["family"] = strip_tags(m.group(1))[:80]
 
+    return info
+
+
+UF_TREES_SERVLET = "https://floridatrees.ifas.ufl.edu/TREESServlet"
+
+
+def _load_uf_trees_index(cache_dir: Path) -> dict[str, dict]:
+    """Load or return empty UF/IFAS Florida Trees classoid index."""
+    idx_path = cache_dir / ".uf_trees_index.json"
+    if not idx_path.exists():
+        return {}
+    return json.loads(idx_path.read_text())
+
+
+def scrape_uf_trees(genus: str, species_epithet: str,
+                    uf_index: dict[str, dict] | None = None) -> dict:
+    """Fetch tree/shrub data from UF/IFAS Florida Trees (floridatrees.ifas.ufl.edu).
+
+    Primary reference for Florida / southeast US trees and shrubs; see
+    https://floridatrees.ifas.ufl.edu/FloridaTrees/ . Returns keys: facts, family,
+    habitat, growth_habit, source.
+    """
+    info: dict[str, str] = {"facts": "", "family": "", "source": "UF/IFAS Florida Trees"}
+    sci_key = f"{genus.lower()} {species_epithet.lower()}"
+    if uf_index is None or sci_key not in uf_index:
+        return info
+    classoid = uf_index[sci_key]["classoid"]
+    try:
+        resp = requests.get(UF_TREES_SERVLET,
+                            params={"command": "getTreeXML", "classoid": str(classoid)},
+                            headers=HEADERS, timeout=15)
+        if resp.status_code != 200:
+            return info
+        root = ET.fromstring(resp.text)
+    except Exception:
+        return info
+
+    info["family"] = root.findtext(".//family", "")
+
+    parts: list[str] = []
+    dt = root.findtext("descriptivetext", "")
+    if dt:
+        text = re.sub(r'<[^>]+>', ' ', dt).strip()
+        text = re.sub(r'\s+', ' ', text).strip()
+        common = root.findtext(".//commonname", "")
+        text = re.sub(
+            rf'^{re.escape(genus)}\s+{re.escape(species_epithet)}\s+'
+            rf'{re.escape(common)}\s*', '', text,
+        ).strip()
+        if text:
+            parts.append(text)
+
+    lifespan = root.findtext("lifespan", "")
+    height = root.findtext(".//matureheight", "")
+    spread = root.findtext(".//maturespread", "")
+    growth = root.findtext(".//growthrate", "")
+    if height:
+        parts.append(f"Reaches {height} tall, {spread} spread.")
+    if growth and lifespan:
+        parts.append(f"{growth.capitalize()} growth rate; lifespan {lifespan}.")
+
+    light = root.findtext(".//lightrequirements", "")
+    drought = root.findtext(".//droughttolerance", "")
+    soil_txt = root.findtext(".//soiltexturetolerance", "")
+    salt = root.findtext(".//saltspraytolerance", "")
+    habitat_bits = []
+    if light:
+        habitat_bits.append(light)
+    if drought:
+        habitat_bits.append(f"drought tolerance: {drought}")
+    if soil_txt:
+        habitat_bits.append(f"tolerates {soil_txt} soils")
+    if salt and salt != "unknown":
+        habitat_bits.append(f"salt spray tolerance: {salt}")
+    if habitat_bits:
+        info["habitat"] = "; ".join(habitat_bits)
+
+    native_states = root.findtext(".//nativestate", "")
+    if native_states:
+        parts.append(f"Native to {native_states}.")
+
+    info["facts"] = " ".join(parts)[:1200]
+
+    ptype = root.findtext("planttype", "")
+    if ptype:
+        info["growth_habit"] = ptype
+
+    native_fl = root.findtext(".//nativefloridacounty", "")
+    if native_fl:
+        info["native_counties"] = native_fl
+
+    return info
+
+
+FLORIDA_ATLAS_URL = "https://florida.plantatlas.usf.edu/plant/species/{species_id}"
+
+
+def _load_atlas_index(cache_dir: Path) -> dict[str, int]:
+    """Load or return empty Florida Plant Atlas name->ID reverse index."""
+    idx_path = cache_dir / ".atlas_index.json"
+    if not idx_path.exists():
+        return {}
+    raw = json.loads(idx_path.read_text())
+    name_to_id: dict[str, int] = {}
+    for sid, name in raw.items():
+        if name:
+            parts = name.split()
+            if len(parts) >= 2:
+                key = f"{parts[0].lower()} {parts[1].lower()}"
+                name_to_id[key] = int(sid)
+    return name_to_id
+
+
+def scrape_florida_atlas(genus: str, species_epithet: str,
+                         atlas_index: dict[str, int] | None = None) -> dict:
+    """Scrape species data from the Atlas of Florida Plants (USF/ISB).
+
+    Returns dict with keys: facts, family, status, growth_habit, source.
+    Requires an atlas_index mapping 'genus species' -> atlas_id.
+    """
+    info: dict[str, str] = {"facts": "", "family": "", "source": "Atlas of Florida Plants"}
+    sci_key = f"{genus.lower()} {species_epithet.lower()}"
+    if atlas_index is None or sci_key not in atlas_index:
+        return info
+    species_id = atlas_index[sci_key]
+    try:
+        resp = requests.get(
+            FLORIDA_ATLAS_URL.format(species_id=species_id),
+            headers=HEADERS, timeout=15,
+        )
+        if resp.status_code != 200:
+            return info
+    except Exception:
+        return info
+    html = resp.text
+
+    def _extract(label: str) -> str:
+        pat = rf'<label[^>]*>{label}</label>\s*<div class="form-control-plaintext">(.*?)</div>'
+        m = re.search(pat, html, re.DOTALL)
+        return re.sub(r'<[^>]+>', '', m.group(1)).strip() if m else ""
+
+    info["family"] = _extract("Family")
+    common = _extract("Common Name")
+    if common:
+        info["common_name"] = common
+
+    gh = _extract("Growth Habit")
+    if gh and gh != "**" and "Not applicable" not in gh:
+        info["growth_habit"] = gh
+
+    # Status badges
+    status_m = re.search(
+        r'<label[^>]*>Status</label>\s*<div class="form-control-plaintext">(.*?)</div>',
+        html, re.DOTALL,
+    )
+    if status_m:
+        badges = re.findall(r'<span[^>]*>([^<]+)</span>', status_m.group(1))
+        status_str = " ".join(b.strip() for b in badges if b.strip())
+        if status_str:
+            info["status"] = status_str
+
+    # Plant Notes (expert-written descriptions)
+    notes_m = re.search(
+        r'<label[^>]*>Plant Notes</label>\s*<div class="form-control-plaintext">(.*?)</div>',
+        html, re.DOTALL,
+    )
+    if notes_m:
+        notes = re.sub(r'<[^>]+>', '', notes_m.group(1)).strip()
+        notes = re.sub(r'\s+', ' ', notes).strip()
+        if notes and "Not applicable" not in notes and len(notes) > 10:
+            info["facts"] = notes[:800]
+
+    info["atlas_id"] = str(species_id)
     return info
 
 
@@ -1767,6 +1960,11 @@ def infer_plant_group(taxon_info: dict, gobotany_info: dict,
     family_clean = family.split("(")[0].strip().split(",")[0].strip()
     if not family_clean:
         family_clean = inat_family
+    if not family_clean:
+        for aid in ancestor_ids:
+            if aid in INAT_FAMILY_IDS:
+                family_clean = INAT_FAMILY_IDS[aid]
+                break
     if family_clean in TREE_FAMILIES:
         return "Trees"
     if family_clean in SHRUB_FAMILIES:
@@ -1835,37 +2033,143 @@ def run_plants(cfg: dict) -> list[dict]:
     cache = load_json(plant_cache_path)
     seasonality = load_json(seasonality_path)
 
-    log.info("\nStep 2: Scraping Go Botany for descriptions...")
+    uf_index = _load_uf_trees_index(cfg["output_dir"])
+    if uf_index:
+        log.info(
+            "\nStep 1b: UF/IFAS Florida Trees (https://floridatrees.ifas.ufl.edu/FloridaTrees/) "
+            "early fetch for indexed taxa (%d in local database)...",
+            len(uf_index),
+        )
+        uf_hits = 0
+        for i, entry in enumerate(species_list):
+            sci = entry["scientific_name"]
+            parts = sci.split()
+            if len(parts) < 2:
+                continue
+            genus, sp_epithet = parts[0], parts[1]
+            cache_key = f"uftree_{genus}_{sp_epithet}"
+
+            if cache_key in cache and cache[cache_key].get("facts"):
+                uf = cache[cache_key]
+            else:
+                uf = scrape_uf_trees(genus, sp_epithet, uf_index)
+                if uf.get("facts"):
+                    cache[cache_key] = uf
+                    save_json(plant_cache_path, cache)
+                    time.sleep(0.2)
+                else:
+                    continue
+
+            if uf.get("facts"):
+                entry["facts"] = uf["facts"]
+                entry["habitat"] = uf.get("habitat", "")
+                entry["family"] = uf.get("family", "")
+                entry["desc_source"] = "UF/IFAS Florida Trees"
+                if uf.get("growth_habit"):
+                    entry.setdefault("gobotany", {})["growth_form"] = uf["growth_habit"].lower()
+                uf_hits += 1
+                if (i + 1) % 50 == 0:
+                    log.info("  [%d/%d] UF Trees hits: %d", i + 1, len(species_list), uf_hits)
+        log.info("  UF/IFAS Florida Trees: enriched %d species", uf_hits)
+    else:
+        log.info("\nStep 1b: Skipped UF/IFAS (no .uf_trees_index.json)")
+
+    log.info("\nStep 2: Scraping Go Botany for remaining descriptions...")
     for i, entry in enumerate(species_list):
         sci = entry["scientific_name"]
         parts = sci.split()
         if len(parts) < 2:
-            entry["gobotany"] = {}
+            entry.setdefault("gobotany", {})
+            continue
+        if entry.get("facts"):
+            entry.setdefault("gobotany", {})
             continue
         genus, sp_epithet = parts[0], parts[1]
         cache_key = f"{genus}_{sp_epithet}"
         log.info("  [%d/%d] %s (%s)", i + 1, len(species_list), entry["common_name"], sci)
 
-        if cache_key in cache and cache[cache_key].get("facts"):
+        if cache_key in cache and cache[cache_key].get("facts") and cache[cache_key]["facts"] not in ("N/A", "n/a"):
             gb = cache[cache_key]
             log.info("    (cached)")
         else:
             gb = scrape_gobotany(genus, sp_epithet)
+            if gb.get("facts") in ("N/A", "n/a"):
+                gb["facts"] = ""
             cache[cache_key] = gb
             save_json(plant_cache_path, cache)
             time.sleep(0.4)
 
         entry["gobotany"] = gb
-        entry["facts"] = gb.get("facts", "")
-        entry["habitat"] = gb.get("habitat", "")
-        entry["family"] = gb.get("family", "")
+        if not entry.get("facts"):
+            entry["facts"] = gb.get("facts", "")
+        if not entry.get("habitat"):
+            entry["habitat"] = gb.get("habitat", "")
+        if not entry.get("family"):
+            entry["family"] = gb.get("family", "")
         entry["conservation"] = ""
-        entry["desc_source"] = "Go Botany / Native Plant Trust" if gb.get("facts") else ""
+        if not entry.get("desc_source") and gb.get("facts"):
+            entry["desc_source"] = "Go Botany / Native Plant Trust"
 
         if gb.get("facts"):
             log.info("    %s", gb["facts"][:70] + "...")
         else:
             log.info("    No Go Botany page")
+
+    atlas_index = _load_atlas_index(cfg["output_dir"])
+    if atlas_index:
+        needs_atlas = [e for e in species_list if not e.get("facts")]
+        log.info("\nStep 2-FL: Atlas of Florida Plants for %d species without Go Botany data...",
+                 len(needs_atlas))
+        atlas_hits = 0
+        for i, entry in enumerate(needs_atlas):
+            sci = entry["scientific_name"]
+            parts = sci.split()
+            if len(parts) < 2:
+                continue
+            genus, sp_epithet = parts[0], parts[1]
+            cache_key = f"fatlas_{genus}_{sp_epithet}"
+            if cache_key in cache and cache[cache_key].get("facts"):
+                fa = cache[cache_key]
+            else:
+                fa = scrape_florida_atlas(genus, sp_epithet, atlas_index)
+                cache[cache_key] = fa
+                save_json(plant_cache_path, cache)
+                if fa.get("facts"):
+                    time.sleep(0.3)
+
+            if fa.get("facts"):
+                entry["facts"] = fa["facts"]
+                entry["desc_source"] = "Atlas of Florida Plants"
+                if fa.get("family"):
+                    entry["family"] = fa["family"]
+                if fa.get("growth_habit"):
+                    entry["gobotany"]["growth_form"] = fa["growth_habit"].lower()
+                atlas_hits += 1
+                if (i + 1) % 50 == 0 or i == len(needs_atlas) - 1:
+                    log.info("  [%d/%d] Atlas hits: %d", i + 1, len(needs_atlas), atlas_hits)
+            elif fa.get("family") and not entry.get("family"):
+                entry["family"] = fa["family"]
+                if fa.get("growth_habit"):
+                    entry["gobotany"]["growth_form"] = fa["growth_habit"].lower()
+        log.info("  Florida Atlas: enriched %d species with descriptions", atlas_hits)
+
+        enriched_fam = 0
+        for entry in species_list:
+            if entry.get("family"):
+                continue
+            sci = entry["scientific_name"]
+            parts = sci.split()
+            if len(parts) < 2:
+                continue
+            cache_key = f"fatlas_{parts[0]}_{parts[1]}"
+            fa = cache.get(cache_key, {})
+            if fa.get("family"):
+                entry["family"] = fa["family"]
+                enriched_fam += 1
+        if enriched_fam:
+            log.info("  Florida Atlas: enriched %d species with family data", enriched_fam)
+    else:
+        log.info("\nStep 2-FL: Skipped (no .atlas_index.json found)")
 
     def _is_tree_candidate(entry):
         gb = entry.get("gobotany", {})
@@ -1874,16 +2178,34 @@ def run_plants(cfg: dict) -> list[dict]:
             return True
         family = gb.get("family", "")
         fam_clean = family.split("(")[0].strip().split(",")[0].strip()
-        return fam_clean in TREE_FAMILIES
+        if fam_clean in TREE_FAMILIES:
+            return True
+        for aid in entry.get("ancestor_ids", []):
+            if aid in INAT_FAMILY_IDS and INAT_FAMILY_IDS[aid] in TREE_FAMILIES:
+                return True
+        return False
 
-    tree_entries = [e for e in species_list if _is_tree_candidate(e)]
-    if tree_entries:
-        log.info("\nStep 2a: Wikipedia for %d tree species (longer descriptions)...",
-                 len(tree_entries))
-        for i, entry in enumerate(tree_entries):
+    def _uf_trees_cached_for_entry(e: dict) -> bool:
+        ps = e.get("scientific_name", "").split()
+        if len(ps) < 2:
+            return False
+        ck = f"uftree_{ps[0]}_{ps[1]}"
+        return bool(cache.get(ck, {}).get("facts"))
+
+    tree_entries_need_wp = [
+        e for e in species_list
+        if _is_tree_candidate(e)
+        and e.get("desc_source") != "UF/IFAS Florida Trees"
+        and not _uf_trees_cached_for_entry(e)
+    ]
+    if tree_entries_need_wp:
+        log.info("\nStep 2a: Wikipedia for %d tree species (skipping %d with UF/IFAS data)...",
+                 len(tree_entries_need_wp),
+                 sum(1 for e in species_list if _is_tree_candidate(e)) - len(tree_entries_need_wp))
+        for i, entry in enumerate(tree_entries_need_wp):
             sci = entry["scientific_name"]
             cache_key = f"wiki_tree_{sci.replace(' ', '_')}"
-            log.info("  [%d/%d] %s", i + 1, len(tree_entries), entry["common_name"])
+            log.info("  [%d/%d] %s", i + 1, len(tree_entries_need_wp), entry["common_name"])
 
             if cache_key in cache and cache[cache_key].get("facts") and len(cache[cache_key]["facts"]) > 500:
                 wp = cache[cache_key]
@@ -1899,7 +2221,7 @@ def run_plants(cfg: dict) -> list[dict]:
                 entry["desc_source"] = "Wikipedia"
                 log.info("    Wikipedia (%d chars): %s", len(wp["facts"]), wp["facts"][:70] + "...")
             else:
-                log.info("    No Wikipedia data, keeping Go Botany")
+                log.info("    No Wikipedia data, keeping existing")
 
     needs_desc = [e for e in species_list if not e.get("facts")]
     if needs_desc:
@@ -2065,6 +2387,44 @@ def run_plants(cfg: dict) -> list[dict]:
         if is_conservation_elevated(entry.get("conservation", "")):
             group = "Conservation Concern"
         entry["group"] = group
+
+    uf_index_core = _load_uf_trees_index(cfg["output_dir"])
+    if uf_index_core:
+        log.info(
+            "\nStep 2e: UF/IFAS Florida Trees (https://floridatrees.ifas.ufl.edu/FloridaTrees/) "
+            "as primary description for Trees & Shrubs where the database lists the species...",
+        )
+        uf_core_hits = 0
+        for entry in species_list:
+            if entry.get("group") not in ("Trees", "Shrubs"):
+                continue
+            sci = entry["scientific_name"]
+            parts = sci.split()
+            if len(parts) < 2:
+                continue
+            genus, sp_epithet = parts[0], parts[1]
+            cache_key = f"uftree_{genus}_{sp_epithet}"
+            if cache_key in cache and cache[cache_key].get("facts"):
+                uf = cache[cache_key]
+            else:
+                uf = scrape_uf_trees(genus, sp_epithet, uf_index_core)
+                if uf.get("facts"):
+                    cache[cache_key] = uf
+                    save_json(plant_cache_path, cache)
+                    time.sleep(0.2)
+            if not uf.get("facts"):
+                continue
+            entry["facts"] = uf["facts"]
+            entry["desc_source"] = "UF/IFAS Florida Trees"
+            if uf.get("habitat"):
+                entry["habitat"] = uf["habitat"]
+            if uf.get("family"):
+                entry["family"] = uf["family"]
+            if uf.get("growth_habit"):
+                entry.setdefault("gobotany", {})["growth_form"] = uf["growth_habit"].lower()
+            uf_core_hits += 1
+        log.info("  Applied UF/IFAS Florida Trees as core text for %d trees & shrubs",
+                 uf_core_hits)
 
     species_list.sort(key=lambda e: (
         PLANT_GROUP_ORDER.index(e["group"]) if e["group"] in PLANT_GROUP_ORDER else 99,
@@ -2827,9 +3187,6 @@ def build_plant_card(plant: dict, current_month_0: int, cfg: dict) -> str:
     meta_tags = ""
     if inat_count:
         meta_tags += f'<span class="meta-tag">iNat: {inat_count} obs</span>'
-    desc_source = plant.get("desc_source", "")
-    if desc_source:
-        meta_tags += f'<span class="meta-tag">{esc(desc_source)}</span>'
 
     seas = plant.get("seasonality", [0] * 12)
     apr_may = 1 if (month_level(seas, 3) > 0 or month_level(seas, 4) > 0) else 0

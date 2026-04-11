@@ -56,3 +56,5 @@ output/*/.seasonality.json
 output/*/.sea_cache.json
 output/*/.desc_cache.json
 output/*/.index_pre_map.html
+output/*/.atlas_index.json
+output/*/.uf_trees_index.json
