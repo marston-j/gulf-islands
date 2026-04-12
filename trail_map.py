@@ -738,10 +738,10 @@ HEAD_CDN = (
     "default-src 'none';"
     "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net;"
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com https://cdn.jsdelivr.net;"
-    "img-src 'self' data: https://cdn.download.ams.birds.cornell.edu https://*.basemaps.cartocdn.com https://*.tile.openstreetmap.org https://*.tile.opentopomap.org https://server.arcgisonline.com;"
+    "img-src 'self' data: https://cdn.download.ams.birds.cornell.edu https://*.basemaps.cartocdn.com https://*.tile.openstreetmap.org https://*.tile.opentopomap.org https://server.arcgisonline.com https://tiles.arcgis.com https://gis.charttools.noaa.gov https://tiledimageservices.arcgis.com https://unpkg.com;"
     "font-src https://fonts.gstatic.com;"
     "media-src https://cdn.download.ams.birds.cornell.edu;"
-    "connect-src 'none';"
+    "connect-src https://tiledimageservices.arcgis.com;"
     '"/>\n'
     '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"'
     ' integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H"'
@@ -1149,17 +1149,20 @@ def main():
 
     # ── eBird layers ──
     log.info("\nStep 2/3  Fetching eBird data...")
-    if args.ebird_key:
+    has_cached_ebird = "hotspots" in cache
+    if args.ebird_key or has_cached_ebird:
+        if not args.ebird_key:
+            log.info("  No eBird key — using cached data only")
         log.info("  [11/12] Birding hotspots")
-        layers["hotspots"] = fetch_hotspots(bbox, args.ebird_key, cache)
+        layers["hotspots"] = fetch_hotspots(bbox, args.ebird_key or "", cache)
         save_cache(cache_path, cache)
 
         log.info("  [12/12] Recent observations (%d days)", args.back)
-        layers["ebird_obs"] = fetch_ebird_obs(bbox, args.ebird_key,
+        layers["ebird_obs"] = fetch_ebird_obs(bbox, args.ebird_key or "",
                                               args.back, cache)
         save_cache(cache_path, cache)
     else:
-        log.warning("  No eBird key — skipping bird layers")
+        log.warning("  No eBird key and no cache — skipping bird layers")
         layers["hotspots"] = {"type": "FeatureCollection", "features": []}
         layers["ebird_obs"] = {"type": "FeatureCollection", "features": []}
 

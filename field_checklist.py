@@ -1951,10 +1951,17 @@ def compute_weather_forecast(lat: float, lng: float,
         md = mr.json().get("daily", {})
         m_dates = md.get("time", [])
         m_waves = md.get("wave_height_max", [])
+        last_valid_wave = None
         for k, dt_str in enumerate(m_dates):
             if k < len(m_waves) and m_waves[k] is not None:
                 marine_waves[dt_str] = m_waves[k]
-        log.info("  Marine forecast: %d days of wave data", len(marine_waves))
+                last_valid_wave = m_waves[k]
+        if last_valid_wave is not None:
+            for dt_str in m_dates:
+                if dt_str not in marine_waves:
+                    marine_waves[dt_str] = last_valid_wave
+        log.info("  Marine forecast: %d days of wave data (last valid: %s m)",
+                 len(marine_waves), last_valid_wave)
     except Exception as e:
         log.warning("Marine forecast fetch failed: %s", e)
 

@@ -8967,8 +8967,11 @@
   },
   "fatlas_Sarracenia_flava": {
     "facts": "",
-    "family": "",
-    "source": "Atlas of Florida Plants"
+    "family": "SARRACENIACEAE",
+    "source": "Atlas of Florida Plants",
+    "common_name": "YELLOW PITCHERPLANT",
+    "status": "Native OBL (NWPL) OBL (DEP)",
+    "atlas_id": "3265"
   },
   "fatlas_Serenoa_repens": {
     "facts": "A slow-growing palm well adapted to fire, some ramets have been estimated to be over 500 years old (Abrahamson 1995) and some genets to be over 5,000 years old (Takahashi et al. 20111). The fruits have been implicated in improving urinary tract symptoms (Bennett &amp; Hicklin 1998; Austin 2004; Görne et al. 2016; Novara et al. 2016) and alopecia (Maria Borrás et al. 2016; Wessagowit et al. 2016). The fruits are rich in oleic acid, lauric acid, and B-sitosterol (De Monte et al. 2014). Their taste has been described as &quot;rotten Cheese steep&#x27;d in Tobacco&quot; (Dickinson 1699) or &quot;bitterish and stinging [...] but soon becomes familiar and desirable&quot; (Bartram in Squier 1853).",
@@ -9702,8 +9705,11 @@
   },
   "fatlas_Plantago_wrightiana": {
     "facts": "",
-    "family": "",
-    "source": "Atlas of Florida Plants"
+    "family": "PLANTAGINACEAE",
+    "source": "Atlas of Florida Plants",
+    "common_name": "WRIGHT&#x27;S PLANTAIN",
+    "status": "Native",
+    "atlas_id": "853"
   },
   "fatlas_Pteridium_caudatum": {
     "facts": "",
@@ -10271,8 +10277,11 @@
   },
   "fatlas_Gaylussacia_dumosa": {
     "facts": "",
-    "family": "",
-    "source": "Atlas of Florida Plants"
+    "family": "ERICACEAE",
+    "source": "Atlas of Florida Plants",
+    "common_name": "DWARF HUCKLEBERRY",
+    "status": "Native FAC (NWPL) FAC (DEP)",
+    "atlas_id": "977"
   },
   "fatlas_Ulmus_alata": {
     "facts": "",
@@ -10425,8 +10434,11 @@
   },
   "fatlas_Hypericum_crux-andreae": {
     "facts": "",
-    "family": "",
-    "source": "Atlas of Florida Plants"
+    "family": "CLUSIACEAE",
+    "source": "Atlas of Florida Plants",
+    "common_name": "ST.PETER&#x27;S-WORT",
+    "status": "Native FACW (NWPL) FACW (DEP)",
+    "atlas_id": "3376"
   },
   "fatlas_Aristida_beyrichiana": {
     "facts": "",
@@ -10443,8 +10455,11 @@
   },
   "fatlas_Asclepias_michauxii": {
     "facts": "",
-    "family": "",
-    "source": "Atlas of Florida Plants"
+    "family": "APOCYNACEAE",
+    "source": "Atlas of Florida Plants",
+    "common_name": "MICHAUX&#x27;S MILKWEED",
+    "status": "Native FAC (NWPL)",
+    "atlas_id": "1013"
   },
   "fatlas_Asclepias_obovata": {
     "facts": "",
@@ -10464,8 +10479,11 @@
   },
   "fatlas_Eragrostis_secundiflora": {
     "facts": "",
-    "family": "",
-    "source": "Atlas of Florida Plants"
+    "family": "POACEAE",
+    "source": "Atlas of Florida Plants",
+    "common_name": "RED LOVEGRASS",
+    "status": "Native UPL (NWPL) FAC (DEP)",
+    "atlas_id": "2161"
   },
   "fatlas_Helenium_pinnatifidum": {
     "facts": "",
