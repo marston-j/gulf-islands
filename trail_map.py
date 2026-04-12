@@ -738,10 +738,10 @@ HEAD_CDN = (
     "default-src 'none';"
     "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net;"
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com https://cdn.jsdelivr.net;"
-    "img-src 'self' data: https://cdn.download.ams.birds.cornell.edu https://*.basemaps.cartocdn.com https://*.tile.openstreetmap.org https://*.tile.opentopomap.org https://server.arcgisonline.com https://tiles.arcgis.com https://gis.charttools.noaa.gov https://tiledimageservices.arcgis.com https://unpkg.com;"
+    "img-src 'self' data: https://cdn.download.ams.birds.cornell.edu https://*.basemaps.cartocdn.com https://*.tile.openstreetmap.org https://*.tile.opentopomap.org https://server.arcgisonline.com https://tiles.arcgis.com https://gis.charttools.noaa.gov https://coastwatch.pfeg.noaa.gov https://unpkg.com;"
     "font-src https://fonts.gstatic.com;"
     "media-src https://cdn.download.ams.birds.cornell.edu;"
-    "connect-src https://tiledimageservices.arcgis.com;"
+    "connect-src https://coastwatch.pfeg.noaa.gov;"
     '"/>\n'
     '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"'
     ' integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H"'
@@ -926,8 +926,9 @@ function initMap(){
   _mapLayers.ebird_obs=obsCluster;
 
   _mapLayers.bathymetry=L.tileLayer('https://tiles.arcgis.com/tiles/C8EMgrsFcRFL6LrL/arcgis/rest/services/Gulf_Wide_Bathymetry/MapServer/tile/{z}/{y}/{x}',{opacity:0.5,maxZoom:10,attribution:'NOAA NCEI Gulf Bathymetry'});
-  _mapLayers.noaa_charts=L.tileLayer('https://gis.charttools.noaa.gov/arcgis/rest/services/MarineChart_Services/NOAACharts/MapServer/tile/{z}/{y}/{x}',{opacity:0.6,attribution:'NOAA Chart Display'});
-  _mapLayers.currents=L.tileLayer('https://tiledimageservices.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/annual_drifter_mean_v3/ImageServer/tile/{z}/{y}/{x}',{opacity:0.6,maxZoom:2,attribution:'NOAA/AOML Ocean Currents'});
+  var NOAAChartLayer=L.TileLayer.extend({getTileUrl:function(coords){var z=Math.max(0,coords.z-2);return 'https://gis.charttools.noaa.gov/arcgis/rest/services/MarineChart_Services/NOAACharts/MapServer/WMTS/tile/1.0.0/MarineChart_Services_NOAACharts/default/GoogleMapsCompatible/'+z+'/'+coords.y+'/'+coords.x+'.png';}});
+  _mapLayers.noaa_charts=new NOAAChartLayer('',{opacity:0.6,minZoom:3,maxZoom:17,attribution:'NOAA Chart Display'});
+  _mapLayers.currents=L.tileLayer.wms('https://coastwatch.pfeg.noaa.gov/erddap/wms/noaacwBLENDEDNRTcurrentsDaily/request',{layers:'noaacwBLENDEDNRTcurrentsDaily:u_current',transparent:true,format:'image/png',opacity:0.5,attribution:'NOAA CoastWatch Ocean Currents',time:''});
 
   var defaults=__DEFAULTS_OBJ__;
   for(var k in _mapLayers){if(defaults[k])_mapLayers[k].addTo(_map);}
