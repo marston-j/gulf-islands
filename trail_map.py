@@ -75,7 +75,7 @@ LAYER_DEFS = {
     "ebird_obs":   {"label": "eBird Obs (30 d)",     "color": "#1A6B3A", "on": False},
     "bathymetry":  {"label": "Gulf Bathymetry",      "color": "#1A5276", "on": False, "tile": True},
     "noaa_charts": {"label": "NOAA Nautical Charts", "color": "#1B4F72", "on": False, "tile": True},
-    "currents":    {"label": "Ocean Currents",       "color": "#2874A6", "on": False, "tile": True},
+    "currents":    {"label": "Ocean Reference",       "color": "#2874A6", "on": False, "tile": True},
 }
 
 # ─── Caching ───────────────────────────────────────────────────────
@@ -512,8 +512,33 @@ def fetch_critical_wildlife(bbox, cache):
                          "ownership", "protected_area"])
 
 
+ANERR_FALLBACK: dict = {
+    "type": "Feature",
+    "properties": {
+        "name": "Apalachicola National Estuarine Research Reserve",
+        "protection_title": "National Estuarine Research Reserve (246,766 acres)",
+        "protect_class": "4",
+    },
+    "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+            [-85.22, 29.95], [-85.13, 29.95], [-85.00, 29.92],
+            [-84.88, 29.88], [-84.75, 29.85], [-84.65, 29.82],
+            [-84.58, 29.77], [-84.55, 29.72], [-84.55, 29.65],
+            [-84.60, 29.58], [-84.70, 29.55], [-84.80, 29.58],
+            [-84.85, 29.60], [-84.92, 29.57], [-85.00, 29.57],
+            [-85.08, 29.60], [-85.15, 29.62], [-85.22, 29.65],
+            [-85.28, 29.68], [-85.35, 29.72], [-85.38, 29.76],
+            [-85.35, 29.82], [-85.30, 29.87], [-85.25, 29.92],
+            [-85.22, 29.95],
+        ]],
+    },
+}
+
+
 def fetch_nerrs(bbox, cache):
-    """Fetch National Estuarine Research Reserve boundaries from OSM."""
+    """Fetch National Estuarine Research Reserve boundaries from OSM,
+    with a hardcoded fallback for Apalachicola NERR (not in OSM)."""
     bb = bbox_ql(bbox)
     q = (
         f"[out:json][timeout:300];\n"
@@ -523,8 +548,16 @@ def fetch_nerrs(bbox, cache):
         f'  relation["name"~"Apalachicola.*Reserve",i]({bb});\n'
         f");\nout body;\n>;\nout skel qt;"
     )
-    return _osm_geojson(q, cache, "nerrs_v1",
-                        ["name", "protect_class", "protection_title"])
+    gj = _osm_geojson(q, cache, "nerrs_v2",
+                       ["name", "protect_class", "protection_title"])
+    names = {f["properties"].get("name", "").lower() for f in gj["features"]}
+    if not any("apalachicola" in n and "estuarine" in n for n in names):
+        s, w, n, e = bbox
+        ac = ANERR_FALLBACK["geometry"]["coordinates"][0]
+        if any(s <= c[1] <= n and w <= c[0] <= e for c in ac):
+            gj["features"].append(ANERR_FALLBACK)
+            log.info("    + added Apalachicola NERR fallback polygon")
+    return gj
 
 
 INAT_API_URL = "https://api.inaturalist.org/v1"
@@ -738,10 +771,9 @@ HEAD_CDN = (
     "default-src 'none';"
     "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net;"
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com https://cdn.jsdelivr.net;"
-    "img-src 'self' data: https://cdn.download.ams.birds.cornell.edu https://*.basemaps.cartocdn.com https://*.tile.openstreetmap.org https://*.tile.opentopomap.org https://server.arcgisonline.com https://tiles.arcgis.com https://gis.charttools.noaa.gov https://coastwatch.pfeg.noaa.gov https://unpkg.com;"
+    "img-src 'self' data: https://cdn.download.ams.birds.cornell.edu https://*.basemaps.cartocdn.com https://*.tile.openstreetmap.org https://*.tile.opentopomap.org https://server.arcgisonline.com https://tiles.arcgis.com https://gis.charttools.noaa.gov https://unpkg.com;"
     "font-src https://fonts.gstatic.com;"
     "media-src https://cdn.download.ams.birds.cornell.edu;"
-    "connect-src https://coastwatch.pfeg.noaa.gov;"
     '"/>\n'
     '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"'
     ' integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H"'
@@ -781,6 +813,7 @@ function initMap(){
   if(tog){tog.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 22 8.5 12 15 2 8.5"/><polyline points="2 12 12 18.5 22 12"/><polyline points="2 15.5 12 22 22 15.5"/></svg>';}
   L.control.scale().addTo(_map);
 
+  var tileOverlayPane=_map.createPane('tileOverlays');tileOverlayPane.style.zIndex=250;
   var areaPane=_map.createPane('areas');areaPane.style.zIndex=350;
   var markerPane=_map.createPane('markers');markerPane.style.zIndex=450;
 
@@ -925,10 +958,10 @@ function initMap(){
   }).addTo(obsCluster);
   _mapLayers.ebird_obs=obsCluster;
 
-  _mapLayers.bathymetry=L.tileLayer('https://tiles.arcgis.com/tiles/C8EMgrsFcRFL6LrL/arcgis/rest/services/Gulf_Wide_Bathymetry/MapServer/tile/{z}/{y}/{x}',{opacity:0.5,maxZoom:10,attribution:'NOAA NCEI Gulf Bathymetry'});
+  _mapLayers.bathymetry=L.tileLayer('https://tiles.arcgis.com/tiles/C8EMgrsFcRFL6LrL/arcgis/rest/services/Gulf_Wide_Bathymetry/MapServer/tile/{z}/{y}/{x}',{opacity:0.5,maxZoom:10,pane:'tileOverlays',attribution:'NOAA NCEI Gulf Bathymetry'});
   var NOAAChartLayer=L.TileLayer.extend({getTileUrl:function(coords){var z=Math.max(0,coords.z-2);return 'https://gis.charttools.noaa.gov/arcgis/rest/services/MarineChart_Services/NOAACharts/MapServer/WMTS/tile/1.0.0/MarineChart_Services_NOAACharts/default/GoogleMapsCompatible/'+z+'/'+coords.y+'/'+coords.x+'.png';}});
-  _mapLayers.noaa_charts=new NOAAChartLayer('',{opacity:0.6,minZoom:3,maxZoom:17,attribution:'NOAA Chart Display'});
-  _mapLayers.currents=L.tileLayer.wms('https://coastwatch.pfeg.noaa.gov/erddap/wms/noaacwBLENDEDNRTcurrentsDaily/request',{layers:'noaacwBLENDEDNRTcurrentsDaily:u_current',transparent:true,format:'image/png',opacity:0.5,attribution:'NOAA CoastWatch Ocean Currents',time:''});
+  _mapLayers.noaa_charts=new NOAAChartLayer('',{opacity:0.6,minZoom:3,maxZoom:17,pane:'tileOverlays',attribution:'NOAA Chart Display'});
+  _mapLayers.currents=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Reference/MapServer/tile/{z}/{y}/{x}',{opacity:0.8,pane:'tileOverlays',attribution:'Esri Ocean Reference'});
 
   var defaults=__DEFAULTS_OBJ__;
   for(var k in _mapLayers){if(defaults[k])_mapLayers[k].addTo(_map);}
