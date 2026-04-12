@@ -769,10 +769,9 @@ MAP_CSS = """
 HEAD_CDN = (
     '<meta http-equiv="Content-Security-Policy" content="'
     "default-src 'none';"
-    "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net;"
+    "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net;"
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com https://cdn.jsdelivr.net;"
-    "img-src 'self' data: https://cdn.download.ams.birds.cornell.edu https://*.basemaps.cartocdn.com https://*.tile.openstreetmap.org https://*.tile.opentopomap.org https://server.arcgisonline.com https://tiles.arcgis.com https://gis.charttools.noaa.gov https://unpkg.com https://inaturalist-open-data.s3.amazonaws.com https://static.inaturalist.org https://tiledimageservices.arcgis.com;"
-    "connect-src https://tiledimageservices.arcgis.com https://unpkg.com;"
+    "img-src 'self' data: https://cdn.download.ams.birds.cornell.edu https://*.basemaps.cartocdn.com https://*.tile.openstreetmap.org https://*.tile.opentopomap.org https://server.arcgisonline.com https://tiles.arcgis.com https://gis.charttools.noaa.gov https://unpkg.com https://inaturalist-open-data.s3.amazonaws.com https://static.inaturalist.org;"
     "font-src https://fonts.gstatic.com;"
     "media-src https://cdn.download.ams.birds.cornell.edu;"
     '"/>\n'
@@ -790,10 +789,6 @@ HEAD_CDN = (
     ' crossorigin="anonymous"></' + 'script>\n'
     '<script src="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"'
     ' integrity="sha384-eXVCORTRlv4FUUgS/xmOyr66XBVraen8ATNLMESp92FKXLAMiKkerixTiBvXriZr"'
-    ' crossorigin="anonymous"></' + 'script>\n'
-    '<script src="https://unpkg.com/esri-leaflet@3.0.12/dist/esri-leaflet.js"'
-    ' crossorigin="anonymous"></' + 'script>\n'
-    '<script src="https://unpkg.com/lerc@4.0.4/LercDecode.js"'
     ' crossorigin="anonymous"></' + 'script>\n'
 )
 
@@ -966,47 +961,7 @@ function initMap(){
   _mapLayers.bathymetry=L.tileLayer('https://tiles.arcgis.com/tiles/C8EMgrsFcRFL6LrL/arcgis/rest/services/Gulf_Wide_Bathymetry/MapServer/tile/{z}/{y}/{x}',{opacity:0.5,maxZoom:10,pane:'tileOverlays',attribution:'NOAA NCEI Gulf Bathymetry'});
   var NOAAChartLayer=L.TileLayer.extend({getTileUrl:function(coords){var z=Math.max(0,coords.z-2);return 'https://gis.charttools.noaa.gov/arcgis/rest/services/MarineChart_Services/NOAACharts/MapServer/WMTS/tile/1.0.0/MarineChart_Services_NOAACharts/default/GoogleMapsCompatible/'+z+'/'+coords.y+'/'+coords.x+'.png';}});
   _mapLayers.noaa_charts=new NOAAChartLayer('',{opacity:0.6,minZoom:3,maxZoom:17,pane:'tileOverlays',attribution:'NOAA Chart Display'});
-  _mapLayers.currents=(function(){
-    var cvs=document.createElement('canvas');
-    var base='https://tiledimageservices.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/annual_drifter_mean_v3/ImageServer/tile';
-    var origLat=85,origLng=-180,res=0.25,tsz=256;
-    var tileDeg=res*tsz;
-    var tiles=[[2,0,1],[2,0,2],[2,1,1],[2,1,2]];
-    var minC=1,maxC=2,minR=0,maxR=1;
-    var cols=maxC-minC+1,rows=maxR-minR+1;
-    var west=origLng+minC*tileDeg,east=origLng+(maxC+1)*tileDeg;
-    var north=origLat-minR*tileDeg,south=origLat-(maxR+1)*tileDeg;
-    var overlay=L.imageOverlay('',[[south,west],[north,east]],{opacity:0.65,pane:'tileOverlays',attribution:'NOAA AOML Ocean Surface Currents 2005\u20132023'});
-    overlay._renderCurrents=function(){
-      var self=this;
-      Lerc.load({locateFile:function(f){return 'https://unpkg.com/lerc@4.0.4/'+f;}}).then(function(){
-        cvs.width=cols*tsz;cvs.height=rows*tsz;
-        var ctx=cvs.getContext('2d');
-        var loaded=0;
-        tiles.forEach(function(t){
-          var lv=t[0],r=t[1],c=t[2];
-          var cx=(c-minC)*tsz,cy=(r-minR)*tsz;
-          fetch(base+'/'+lv+'/'+r+'/'+c).then(function(resp){return resp.arrayBuffer();}).then(function(buf){
-            try{
-              var d=Lerc.decode(buf);
-              var mag=d.pixels[0],w=d.width,h=d.height;
-              var img=ctx.createImageData(w,h);
-              for(var i=0;i<w*h;i++){
-                var v=mag[i],p=i*4;
-                if(v>1e30||v<1e-6){img.data[p+3]=0;}
-                else{var n=Math.min(v/0.8,1);img.data[p]=Math.round(20+n*210);img.data[p+1]=Math.round(80-n*50);img.data[p+2]=Math.round(200-n*170);img.data[p+3]=Math.round(100+n*155);}
-              }
-              ctx.putImageData(img,cx,cy);
-            }catch(e){console.warn('LERC decode err',e);}
-            loaded++;
-            if(loaded===tiles.length){self.setUrl(cvs.toDataURL());}
-          }).catch(function(e){console.warn('tile fetch err',e);loaded++;});
-        });
-      }).catch(function(e){console.warn('Lerc.load err',e);});
-    };
-    overlay.onAdd=function(map){L.ImageOverlay.prototype.onAdd.call(this,map);this._renderCurrents();};
-    return overlay;
-  })();
+  _mapLayers.currents=L.imageOverlay('currents.png',[[-43,-116],[85,12]],{opacity:0.65,pane:'tileOverlays',attribution:'NOAA AOML Ocean Surface Currents 2005\u20132023'});
 
   var defaults=__DEFAULTS_OBJ__;
   for(var k in _mapLayers){if(defaults[k])_mapLayers[k].addTo(_map);}
@@ -1114,6 +1069,75 @@ def build_parts(layers: dict, bbox: tuple) -> dict:
 
 
 # ─── Inject into existing index.html ─────────────────────────────
+
+def generate_currents_png(out_path: Path):
+    """Fetch NOAA AOML ocean surface current tiles (LERC), reproject to
+    Web Mercator, and save as a PNG overlay for Leaflet."""
+    import math
+    try:
+        import lerc as lerc_mod
+        import numpy as np
+        from PIL import Image
+    except ImportError:
+        log.warning("  Missing lerc/numpy/Pillow — skipping currents PNG")
+        return
+
+    ORIG_LAT, ORIG_LNG, RES, TSZ = 85.0, -180.0, 0.25, 256
+    TILE_DEG = RES * TSZ
+    base = ("https://tiledimageservices.arcgis.com/P3ePLMYs2RVChkJx/"
+            "arcgis/rest/services/annual_drifter_mean_v3/ImageServer/tile")
+    tiles = [(2, 0, 1), (2, 0, 2), (2, 1, 1), (2, 1, 2)]
+    min_col, max_col, min_row, max_row = 1, 2, 0, 1
+    gw = (max_col - min_col + 1) * TSZ
+    gh = (max_row - min_row + 1) * TSZ
+    mag = np.full((gh, gw), np.nan, dtype=np.float64)
+
+    for lv, r, c in tiles:
+        try:
+            resp = requests.get(f"{base}/{lv}/{r}/{c}", timeout=30)
+            resp.raise_for_status()
+            _, data, _ = lerc_mod.decode(resp.content)
+            band = data[0] if data.ndim == 3 else data
+            px, py = (c - min_col) * TSZ, (r - min_row) * TSZ
+            mag[py:py + band.shape[0], px:px + band.shape[1]] = band
+            log.info("  Tile %d/%d/%d decoded", lv, r, c)
+        except Exception as exc:
+            log.warning("  Tile %d/%d/%d failed: %s", lv, r, c, exc)
+
+    geo_w = ORIG_LNG + min_col * TILE_DEG
+    geo_e = ORIG_LNG + (max_col + 1) * TILE_DEG
+    geo_n = ORIG_LAT - min_row * TILE_DEG
+    geo_s = ORIG_LAT - (max_row + 1) * TILE_DEG
+
+    def _merc(lat):
+        return math.log(math.tan(math.pi / 4 + math.radians(min(max(lat, -85), 85)) / 2))
+
+    def _inv_merc(y):
+        return math.degrees(2 * math.atan(math.exp(y)) - math.pi / 2)
+
+    mn, ms = _merc(geo_n), _merc(geo_s)
+    mr = mn - ms
+    OW = 1024
+    OH = max(1, int(OW * mr / math.radians(geo_e - geo_w)))
+
+    arr = np.zeros((OH, OW, 4), dtype=np.uint8)
+    for oy in range(OH):
+        lat = _inv_merc(mn - (oy / OH) * mr)
+        ri = min(int((geo_n - lat) / RES), gh - 1)
+        if ri < 0:
+            continue
+        for ox in range(OW):
+            ci = min(int((ox / OW) * gw), gw - 1)
+            v = mag[ri, ci]
+            if np.isnan(v) or v < 1e-6 or v > 1e30:
+                continue
+            n = min(v / 0.8, 1.0)
+            arr[oy, ox] = [int(20 + n * 210), int(80 - n * 50),
+                           int(200 - n * 170), int(100 + n * 155)]
+
+    Image.fromarray(arr, "RGBA").save(str(out_path), "PNG", optimize=True)
+    log.info("  Saved %s (%d KB)", out_path.name, out_path.stat().st_size // 1024)
+
 
 def inject_map_tab(target: Path, parts: dict):
     backup = target.with_name(".index_pre_map.html")
@@ -1249,6 +1273,14 @@ def main():
     for key, ld in LAYER_DEFS.items():
         cnt = len(layers.get(key, {}).get("features", []))
         log.info("  %-26s %5d features", ld["label"], cnt)
+
+    # ── Ocean currents overlay ──
+    currents_png = output_dir / "currents.png"
+    if not currents_png.exists():
+        log.info("\nGenerating Ocean Surface Currents overlay...")
+        generate_currents_png(currents_png)
+    else:
+        log.info("\nUsing cached currents.png")
 
     # ── Build & inject ──
     log.info("\nStep 3/3  Injecting map tab into %s...", target.name)
