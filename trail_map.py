@@ -933,7 +933,7 @@ function initMap(){
   for(var k in _mapLayers){if(defaults[k])_mapLayers[k].addTo(_map);}
   _map.fitBounds([[__SOUTH__,__WEST__],[__NORTH__,__EAST__]]);
 
-  L.marker([30.3307,-86.1650],{icon:L.divIcon({className:'base-star',html:'<div style="text-align:center"><span style="font-size:22px;color:#D4380D;text-shadow:0 0 3px #fff">&#9733;</span><div style="font-size:9px;font-weight:600;color:#333;white-space:nowrap;margin-top:-2px;font-family:\'IBM Plex Sans\',sans-serif">Base Camp</div></div>',iconSize:[60,36],iconAnchor:[30,18]}),zIndexOffset:1000}).addTo(_map);
+  L.marker([30.3307,-86.1650],{icon:L.divIcon({className:'base-star',html:'<div style="text-align:center"><span style="font-size:14px;color:#1A6B9A;text-shadow:0 0 2px #fff">&#9733;</span><div style="font-size:8px;font-weight:600;color:#333;white-space:nowrap;margin-top:-2px;font-family:\'IBM Plex Sans\',sans-serif">Base Camp</div></div>',iconSize:[50,28],iconAnchor:[25,14]}),zIndexOffset:1000}).addTo(_map);
 
   setTimeout(function(){_map.invalidateSize();},250);
 }
