@@ -969,17 +969,23 @@ function initMap(){
   _mapLayers.currents=(function(){
     var cvs=document.createElement('canvas');
     var base='https://tiledimageservices.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/annual_drifter_mean_v3/ImageServer/tile';
-    var overlay=L.imageOverlay('',[[0,0],[0,0]],{opacity:0.65,pane:'tileOverlays',attribution:'NOAA AOML Ocean Surface Currents 2005\u20132023'});
+    var origLat=85,origLng=-180,res=0.25,tsz=256;
+    var tileDeg=res*tsz;
+    var tiles=[[2,0,1],[2,0,2],[2,1,1],[2,1,2]];
+    var minC=1,maxC=2,minR=0,maxR=1;
+    var cols=maxC-minC+1,rows=maxR-minR+1;
+    var west=origLng+minC*tileDeg,east=origLng+(maxC+1)*tileDeg;
+    var north=origLat-minR*tileDeg,south=origLat-(maxR+1)*tileDeg;
+    var overlay=L.imageOverlay('',[[south,west],[north,east]],{opacity:0.65,pane:'tileOverlays',attribution:'NOAA AOML Ocean Surface Currents 2005\u20132023'});
     overlay._renderCurrents=function(){
       var self=this;
       Lerc.load({locateFile:function(f){return 'https://unpkg.com/lerc@4.0.4/'+f;}}).then(function(){
-        var tiles=[[2,0,0],[2,0,1],[2,0,2],[2,0,3],[2,0,4],[2,0,5],[2,1,0],[2,1,1],[2,1,2],[2,1,3],[2,1,4],[2,1,5]];
-        var tw=256,th=256,cols=6,rows=2;
-        cvs.width=cols*tw;cvs.height=rows*th;
+        cvs.width=cols*tsz;cvs.height=rows*tsz;
         var ctx=cvs.getContext('2d');
         var loaded=0;
         tiles.forEach(function(t){
           var lv=t[0],r=t[1],c=t[2];
+          var cx=(c-minC)*tsz,cy=(r-minR)*tsz;
           fetch(base+'/'+lv+'/'+r+'/'+c).then(function(resp){return resp.arrayBuffer();}).then(function(buf){
             try{
               var d=Lerc.decode(buf);
@@ -990,10 +996,10 @@ function initMap(){
                 if(v>1e30||v<1e-6){img.data[p+3]=0;}
                 else{var n=Math.min(v/0.8,1);img.data[p]=Math.round(20+n*210);img.data[p+1]=Math.round(80-n*50);img.data[p+2]=Math.round(200-n*170);img.data[p+3]=Math.round(100+n*155);}
               }
-              ctx.putImageData(img,c*tw,r*th);
+              ctx.putImageData(img,cx,cy);
             }catch(e){console.warn('LERC decode err',e);}
             loaded++;
-            if(loaded===tiles.length){self.setUrl(cvs.toDataURL());self.setBounds([[-73,-180],[85,180]]);}
+            if(loaded===tiles.length){self.setUrl(cvs.toDataURL());}
           }).catch(function(e){console.warn('tile fetch err',e);loaded++;});
         });
       }).catch(function(e){console.warn('Lerc.load err',e);});
