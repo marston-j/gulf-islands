@@ -961,7 +961,7 @@ function initMap(){
   _mapLayers.bathymetry=L.tileLayer('https://tiles.arcgis.com/tiles/C8EMgrsFcRFL6LrL/arcgis/rest/services/Gulf_Wide_Bathymetry/MapServer/tile/{z}/{y}/{x}',{opacity:0.5,maxZoom:10,pane:'tileOverlays',attribution:'NOAA NCEI Gulf Bathymetry'});
   var NOAAChartLayer=L.TileLayer.extend({getTileUrl:function(coords){var z=Math.max(0,coords.z-2);return 'https://gis.charttools.noaa.gov/arcgis/rest/services/MarineChart_Services/NOAACharts/MapServer/WMTS/tile/1.0.0/MarineChart_Services_NOAACharts/default/GoogleMapsCompatible/'+z+'/'+coords.y+'/'+coords.x+'.png';}});
   _mapLayers.noaa_charts=new NOAAChartLayer('',{opacity:0.6,minZoom:3,maxZoom:17,pane:'tileOverlays',attribution:'NOAA Chart Display'});
-  _mapLayers.currents=L.imageOverlay('currents.png',[[-43,-116],[85,12]],{opacity:0.65,pane:'tileOverlays',attribution:'NOAA AOML Ocean Surface Currents 2005\u20132023'});
+  _mapLayers.currents=L.imageOverlay('currents.png',[[10,-100],[45,-60]],{opacity:0.65,pane:'tileOverlays',attribution:'NOAA AOML Ocean Surface Currents 2005\u20132023'});
 
   var defaults=__DEFAULTS_OBJ__;
   for(var k in _mapLayers){if(defaults[k])_mapLayers[k].addTo(_map);}
@@ -1104,10 +1104,10 @@ def generate_currents_png(out_path: Path):
         except Exception as exc:
             log.warning("  Tile %d/%d/%d failed: %s", lv, r, c, exc)
 
-    geo_w = ORIG_LNG + min_col * TILE_DEG
-    geo_e = ORIG_LNG + (max_col + 1) * TILE_DEG
-    geo_n = ORIG_LAT - min_row * TILE_DEG
-    geo_s = ORIG_LAT - (max_row + 1) * TILE_DEG
+    full_w = ORIG_LNG + min_col * TILE_DEG
+    full_n = ORIG_LAT - min_row * TILE_DEG
+
+    CROP_W, CROP_E, CROP_S, CROP_N = -100.0, -60.0, 10.0, 45.0
 
     def _merc(lat):
         return math.log(math.tan(math.pi / 4 + math.radians(min(max(lat, -85), 85)) / 2))
@@ -1115,19 +1115,22 @@ def generate_currents_png(out_path: Path):
     def _inv_merc(y):
         return math.degrees(2 * math.atan(math.exp(y)) - math.pi / 2)
 
-    mn, ms = _merc(geo_n), _merc(geo_s)
+    mn, ms = _merc(CROP_N), _merc(CROP_S)
     mr = mn - ms
-    OW = 1024
-    OH = max(1, int(OW * mr / math.radians(geo_e - geo_w)))
+    OW = 800
+    OH = max(1, int(OW * mr / math.radians(CROP_E - CROP_W)))
 
     arr = np.zeros((OH, OW, 4), dtype=np.uint8)
     for oy in range(OH):
         lat = _inv_merc(mn - (oy / OH) * mr)
-        ri = min(int((geo_n - lat) / RES), gh - 1)
-        if ri < 0:
+        ri = int((full_n - lat) / RES)
+        if ri < 0 or ri >= gh:
             continue
         for ox in range(OW):
-            ci = min(int((ox / OW) * gw), gw - 1)
+            lng = CROP_W + (ox / OW) * (CROP_E - CROP_W)
+            ci = int((lng - full_w) / RES)
+            if ci < 0 or ci >= gw:
+                continue
             v = mag[ri, ci]
             if np.isnan(v) or v < 1e-6 or v > 1e30:
                 continue
