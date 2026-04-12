@@ -165,6 +165,190 @@ SEAWEED_EDIBILITY: dict[str, str] = {
     "Bostrychia tenella":          "not edible",
 }
 
+SEAWEED_CHARACTERISTICS: dict[str, str] = {
+    "Sargassum fluitans": (
+        "A free-floating brown alga forming large pelagic rafts in the Gulf of Mexico. "
+        "Thallus bushy, 10\u201360 cm, with flattened blades bearing air bladders (pneumatocysts) "
+        "on short stalks. Olive-brown to golden. Provides critical nursery habitat for juvenile "
+        "fish, sea turtles, and invertebrates. One of the dominant species of the Sargasso Sea "
+        "gyre, frequently washing ashore on Gulf beaches."
+    ),
+    "Gracilaria cervicornis": (
+        "A cartilaginous red alga, 10\u201325 cm tall, with cylindrical to slightly flattened "
+        "branches that fork dichotomously or irregularly. Dark red to brownish-purple. Found "
+        "attached to hard substrates in shallow subtidal zones. Source of agar; widely "
+        "harvested in tropical regions for food and phycocolloid production."
+    ),
+    "Gracilaria tikvahiae": (
+        "A fleshy red alga, 10\u201330 cm, with cylindrical, irregularly branched thalli. "
+        "Color ranges from dark red to green depending on light and nutrients. Common in "
+        "estuaries and protected bays on shells, rocks, and mud. Important commercial species "
+        "for agar extraction in the western Atlantic."
+    ),
+    "Hypnea musciformis": (
+        "A wiry red alga, 5\u201320 cm, with cylindrical branches bearing characteristic "
+        "hook-shaped (circinate) branch tips used for attachment to other algae. Pale red to "
+        "yellowish. Epiphytic or free-living on rocky substrates in intertidal and shallow "
+        "subtidal zones. Source of kappa-carrageenan."
+    ),
+    "Hypnea spinella": (
+        "A small, densely branched red alga, 3\u201310 cm, with rigid spinous branchlets. "
+        "Thallus cylindrical, stiff, pinkish-red to dark red. Grows on rocks and other algae "
+        "in the lower intertidal to shallow subtidal. Distinguished from H. musciformis by its "
+        "short, spine-like lateral branchlets rather than hooks."
+    ),
+    "Gelidium crinale": (
+        "A small, tufted red alga forming dense mats, 1\u20134 cm tall. Thallus compressed to "
+        "flattened, with pinnate branching. Dark brownish-red. Attaches firmly to rocks in the "
+        "upper subtidal zone. Used commercially as an agar source. One of the most common "
+        "Gelidium species worldwide."
+    ),
+    "Gelidium pusillum": (
+        "A minute, creeping red alga forming dense turfs, typically 0.5\u20132 cm tall. "
+        "Thallus flattened, irregularly branched, dark red to black. Encrusts rocks and shells "
+        "in the intertidal zone, tolerating desiccation. Important contributor to intertidal "
+        "turf communities."
+    ),
+    "Gelidium spinosum": (
+        "An erect, wiry red alga, 3\u20138 cm tall, with stiff, sparsely branched cylindrical "
+        "axes. Dark purplish-red. Attached to rocks in exposed intertidal and shallow subtidal "
+        "habitats. Distinguished from other Gelidium species by its rigid, spine-tipped branches."
+    ),
+    "Laurencia obtusa": (
+        "A fleshy red alga, 5\u201315 cm, with cylindrical, irregularly alternate branches that "
+        "have characteristically truncated (blunt) tips. Purplish-red to yellowish-green. Grows "
+        "on rocks and coral rubble in the lower intertidal and subtidal. Produces halogenated "
+        "secondary metabolites with antimicrobial and anti-herbivore properties."
+    ),
+    "Laurencia intricata": (
+        "A bushy red alga, 5\u201312 cm, with densely entangled cylindrical branches forming "
+        "intricate clumps. Dark purplish-red to brown. Attached to rocks in intertidal pools "
+        "and shallow subtidal areas. Rich in bioactive halogenated terpenes."
+    ),
+    "Acanthophora spicifera": (
+        "An erect, spiny red alga, 5\u201320 cm tall, with cylindrical main axes bearing "
+        "numerous short, spine-like branchlets in a spiral arrangement. Color ranges from "
+        "greenish-brown to dark red. Attached to rocks, shells, and mangrove roots in "
+        "shallow bays and lagoons. Edible; consumed in Hawaiian and Pacific Island cuisine."
+    ),
+    "Acanthophora muscoides": (
+        "A coarsely branched red alga, 5\u201315 cm, similar to A. spicifera but with shorter, "
+        "more densely packed spine-like branchlets giving a rough texture. Brownish-red. "
+        "Grows on hard substrates in sheltered intertidal and shallow subtidal habitats."
+    ),
+    "Agardhiella subulata": (
+        "A soft, fleshy red alga, 10\u201325 cm, with cylindrical, subulate (awl-shaped) "
+        "branches tapering to fine points. Bright to dark red. Common in estuaries and "
+        "protected bays attached to shells and rocks. An important agar-producing species "
+        "in the western Atlantic."
+    ),
+    "Champia parvula": (
+        "A delicate, hollow red alga, 2\u20138 cm tall, with segmented, barrel-shaped "
+        "branchlets giving a beaded appearance. Translucent pink to rosy-red. Grows "
+        "epiphytically on larger algae and seagrasses in the subtidal zone."
+    ),
+    "Hildenbrandia rubra": (
+        "A crustose red alga forming thin, smooth, blood-red to dark maroon crusts on "
+        "rocks, shells, and pebbles. Thallus firmly adnate, only 0.1\u20130.5 mm thick. "
+        "Common in the intertidal and shallow subtidal; one of the most widespread "
+        "crustose red algae worldwide. Perennial and extremely slow-growing."
+    ),
+    "Amphiroa fragilissima": (
+        "A calcareous red alga, 3\u20138 cm, with slender, dichotomously branched segments "
+        "joined by flexible, uncalcified joints (genicula). Pale pink to whitish due to "
+        "heavy calcium carbonate deposition. Brittle when dry. Found on reef rubble and "
+        "in seagrass beds in tropical-subtropical waters."
+    ),
+    "Amphiroa tribulus": (
+        "A robust, calcareous red alga, 3\u201310 cm, with thick, dichotomously branched "
+        "segments heavily encrusted with calcium carbonate. Pale pink to grayish-white. "
+        "Intergenicula cylindrical to slightly compressed with distinct, dark genicula. "
+        "Grows on reef substrates and rocky bottoms in the shallow subtidal."
+    ),
+    "Jania adhaerens": (
+        "A tiny, calcareous red alga, 1\u20133 cm, forming delicate tufts with very fine, "
+        "dichotomously branched segments separated by conspicuous genicula. Pale pink to "
+        "white. Typically epiphytic on larger fleshy algae in the intertidal and subtidal."
+    ),
+    "Jania capillacea": (
+        "A minute, hair-like calcareous red alga, 0.5\u20132 cm, with extremely fine, "
+        "dichotomous branching and pronounced genicula. White to pale pink. Forms soft, "
+        "feathery tufts on other algae and seagrasses. The finest-branched species in "
+        "the genus, common in warm waters."
+    ),
+    "Chondria dasyphylla": (
+        "An erect red alga, 5\u201315 cm tall, with cylindrical, alternately branched axes. "
+        "Branches taper to acute tips with a conspicuous apical pit (trichoblast tuft). "
+        "Yellowish-brown to dark red. Grows on rocks and epiphytically in the lower "
+        "intertidal and subtidal. Distinguished by its club-shaped branch tips."
+    ),
+    "Spyridia filamentosa": (
+        "A delicate, filamentous red alga, 5\u201320 cm, with a main axis bearing whorls of "
+        "fine, banded cortical filaments giving a fuzzy appearance. Pale pink to rosy-red. "
+        "Widely distributed in warm waters, growing on rocks, other algae, and seagrass "
+        "blades. Often abundant in eutrophic conditions."
+    ),
+    "Crouania attenuata": (
+        "A soft, filamentous red alga, 2\u20138 cm, with delicate axes bearing whorls of "
+        "dichotomously branched cortical filaments that taper towards branch tips. Rosy-pink "
+        "to translucent. Grows epiphytically on larger algae and seagrasses in protected "
+        "subtidal habitats. A graceful, lace-like alga."
+    ),
+    "Erythrocladia irregularis": (
+        "A microscopic to very small crustose red alga forming thin, irregular, one-cell-thick "
+        "discs on other algae and smooth substrates. Cells irregularly arranged in a monostromatic "
+        "layer. Pinkish-red. Common epiphyte in intertidal and subtidal zones, often overlooked "
+        "due to its minute size (typically < 1 mm)."
+    ),
+    "Erythrotrichia carnea": (
+        "A simple, unbranched filamentous red alga, 0.5\u20132 cm tall, consisting of a "
+        "uniseriate (single cell row) filament attached by a basal disc. Pale pink to bright "
+        "red. One of the most common and widespread microscopic red algae, epiphytic on "
+        "larger algae, seagrasses, and artificial substrates."
+    ),
+    "Catenella caespitosa": (
+        "A small, dark-colored red alga, 1\u20133 cm, forming dense, wiry mats on mangrove "
+        "roots, salt marsh plants, and upper intertidal rocks. Thallus consists of compressed, "
+        "bead-like segments connected at narrow constrictions. Dark olive-brown to blackish-red. "
+        "Highly tolerant of desiccation and brackish conditions."
+    ),
+    "Chroodactylon ornatum": (
+        "A microscopic red alga forming small, branched filaments, 1\u20135 mm tall. Cells "
+        "embedded in a gelatinous sheath, giving the thallus a beaded appearance. Pink to "
+        "rose-colored. Epiphytic on larger algae and hard surfaces in the intertidal zone. "
+        "A member of the primitive order Stylonematales."
+    ),
+    "Stylonema alsidii": (
+        "A minute, unbranched to sparsely branched filamentous red alga, 1\u20135 mm long. "
+        "Cells embedded in a firm mucilaginous sheath, uniseriate. Reddish to brownish-purple. "
+        "Common worldwide as an epiphyte on larger algae and other marine surfaces."
+    ),
+    "Helminthocladia calvadosii": (
+        "A soft, gelatinous red alga, 5\u201320 cm, with cylindrical, sparsely branched axes "
+        "that are slippery to the touch. Brownish-red to dark purple. Grows on rocks in the "
+        "lower intertidal and shallow subtidal. Thallus multiaxial with a medulla of loosely "
+        "arranged filaments surrounded by a cortex of radiating assimilatory filaments."
+    ),
+    "Trichogloeopsis pedicellata": (
+        "A soft, gelatinous red alga, 3\u201312 cm, with cylindrical, dichotomously branched "
+        "axes that feel lubricous. Brownish-red to dark rose. Multiaxial construction with "
+        "a loose medullary core. Grows on coral rubble and hard substrates in the subtidal "
+        "zone in tropical-subtropical waters."
+    ),
+    "Bostrychia radicans": (
+        "A small, dark red alga, 2\u20135 cm, with prostrate axes bearing erect, pinnately "
+        "branched fronds. Branch tips often incurved (scorpioid). Attaches via haptera to "
+        "mangrove pneumatophores, salt marsh stems, and intertidal rocks. Tolerates wide "
+        "salinity ranges. A key indicator species in mangrove ecosystems."
+    ),
+    "Bostrychia tenella": (
+        "A small, filamentous red alga, 1\u20134 cm, similar to B. radicans but with finer, "
+        "more delicate branching and conspicuous polysiphonous axes. Dark brownish-red. "
+        "Grows on mangrove roots and pneumatophores. Distinguished by its ecorticate "
+        "(uncovered) stichidia and terete branch tips."
+    ),
+}
+
 SEA_LIFE_TAXON_IDS = {
     47178: "Fish",
     47114: "Shells",            # Gastropoda (sea snails, conchs, whelks)
@@ -179,6 +363,61 @@ SEA_LIFE_TAXON_IDS = {
     73863: "Marine Reptiles",
     40151: "Marine Mammals",
 }
+
+GULF_FISH_SPECIES: list[dict] = [
+    {"common_name": "Red Snapper", "scientific_name": "Lutjanus campechanus",
+     "facts": "A reef-dependent demersal fish found across the Gulf of Mexico at depths of 10\u2013190 m. Can live over 50 years and reach 1 m in length. Highly valued in commercial and recreational fisheries; the species was determined overfished prior to 2010. Juveniles prefer shell and sand substrates, transitioning to reef habitats with age. Batch spawner with a 180-day spawning season peaking in summer."},
+    {"common_name": "Red Grouper", "scientific_name": "Epinephelus morio",
+     "facts": "A large, bottom-dwelling serranid common over rocky reefs and hard-bottom habitats in the eastern Gulf of Mexico. Reddish-brown with pale blotches. Protogynous hermaphrodite\u2014born female, some transition to male. Slow-growing, long-lived (25+ years), reaching 125 cm. Excavates seafloor sediment to create habitat used by other reef species. Commercially and recreationally important; assessed as overfished in some subpopulations."},
+    {"common_name": "Atlantic Bluefin Tuna", "scientific_name": "Thunnus thynnus",
+     "facts": "One of the largest bony fishes, reaching over 3 m and 680 kg. Highly migratory, entering the Gulf of Mexico to spawn from mid-April through June. Endothermic physiology enables high-speed pursuit of prey across temperature gradients. The Gulf of Mexico is the only known western Atlantic spawning ground. Severely overfished for decades; subject to strict international quotas."},
+    {"common_name": "Atlantic Blue Marlin", "scientific_name": "Makaira nigricans",
+     "facts": "A spectacular pelagic billfish reaching 5 m and 900 kg, the largest Atlantic istiophorid. Cobalt-blue dorsal surface with silver-white flanks. Feeds on tunas, mackerels, dolphinfish, and squids. Uses its bill to slash through schools of prey. Highly migratory throughout the tropical and temperate Atlantic. Prized game fish; the species was assessed as overfished prior to 2010."},
+    {"common_name": "Atlantic Swordfish", "scientific_name": "Xiphias gladius",
+     "facts": "A large, highly migratory pelagic fish with a distinctive elongated, flattened bill. Reaches 4.5 m and 650 kg. Unlike marlins, swordfish lack pelvic fins and have a single keel on each side of the caudal peduncle. Feeds at great depths during the day, ascending to surface waters at night. Commercially harvested by longline fleets in the Gulf; stocks recovered after management measures in the 2000s."},
+    {"common_name": "Atlantic Sailfish", "scientific_name": "Istiophorus albicans",
+     "facts": "The fastest fish in the ocean, capable of bursts over 110 km/h. Distinguished by an enormous dorsal fin (sail) that can be raised or lowered. Dark blue above, silver-white below with pale blue vertical bars. Feeds on sardines, anchovies, and squids near the surface. Common in warm Gulf of Mexico waters, especially off the Florida Panhandle. Primarily a catch-and-release sport fish."},
+    {"common_name": "Red Drum", "scientific_name": "Sciaenops ocellatus",
+     "facts": "A coastal demersal sciaenid reaching 1.5 m and 45 kg. Bronze to coppery color with one or more distinctive black spots at the base of the tail. Juveniles inhabit estuaries, seagrass beds, and marsh edges; adults move to nearshore Gulf waters. Produces drumming sounds using swim bladder muscles during spawning. Popular recreational species; managed under strict slot limits after severe overfishing in the 1980s."},
+    {"common_name": "Tilefish", "scientific_name": "Lopholatilus chamaeleonticeps",
+     "facts": "A large, colorful demersal fish inhabiting deep continental shelf and slope waters at 80\u2013540 m. Bluish-green and gold with yellow spots. Constructs and occupies burrows in clay substrate along the outer shelf, creating vertical habitat. Slow-growing, long-lived (40+ years). Flesh is prized for its delicate, sweet flavor. Commercial harvest by longline."},
+    {"common_name": "King Mackerel", "scientific_name": "Scomberomorus cavalla",
+     "facts": "A fast-swimming coastal pelagic scombrid reaching 1.8 m and 45 kg. Streamlined body, iridescent blue-green above, silvery sides. Highly migratory along the Gulf coast, moving inshore in spring and offshore in fall. Feeds on herrings, sardines, and squids. Supports major commercial and recreational fisheries; managed under separate Gulf and Atlantic migratory groups."},
+    {"common_name": "Dolphinfish", "scientific_name": "Coryphaena hippurus",
+     "facts": "Also called mahi-mahi. A brilliantly colored pelagic fish\u2014golden-green and blue\u2014reaching 2 m. Among the fastest-growing fish, reaching maturity in 4\u20135 months. Found near floating Sargassum, debris, and weedlines in warm Gulf waters. Feeds on flyingfish, squids, and crustaceans. Highly valued in both commercial and recreational fisheries for its excellent flesh."},
+    {"common_name": "Striped Mullet", "scientific_name": "Mugil cephalus",
+     "facts": "A torpedo-shaped coastal fish reaching 120 cm. Olive-green above with silvery sides bearing dark longitudinal stripes. Unique among Gulf fishes as a detritivore/herbivore, feeding on microalgae, organic detritus, and biofilms by ingesting sediment. Occurs in estuaries, rivers, and nearshore marine waters. Supports one of the most important commercial cast-net fisheries in the Gulf. Roe is considered a delicacy."},
+    {"common_name": "Greater Amberjack", "scientific_name": "Seriola dumerili",
+     "facts": "The largest of the jacks in the Atlantic, reaching 2 m and 80 kg. Amber-colored stripe from nose through eye to dorsal fin; dark olive above, silvery below. Coastal pelagic, commonly found near reefs, wrecks, and oil platforms at 18\u2013100 m. Aggressive predator of fish and invertebrates. Important commercial and recreational species; assessed as overfished and undergoing management rebuilding."},
+    {"common_name": "Gulf Menhaden", "scientific_name": "Brevoortia patronus",
+     "facts": "A small, filter-feeding clupeid critical to Gulf ecosystem energy transfer, consuming phytoplankton and zooplankton. Flat body, dark spot behind gill cover. Supports one of the largest fisheries in the U.S. by weight (400\u2013600 kilotons annually), used for fishmeal, fish oil, and bait rather than direct consumption. Estuarine-dependent; spawns offshore in winter, juveniles develop in bays."},
+    {"common_name": "Spotted Seatrout", "scientific_name": "Cynoscion nebulosus",
+     "facts": "A popular inshore game fish reaching 100 cm, with silvery sides marked by distinctive round black spots on the upper body and dorsal fins. Inhabits seagrass beds, oyster reefs, and tidal creeks. Males produce drumming sounds to attract mates during spring and summer spawning. Ambush predator feeding on shrimp, crabs, and small fish. Among the top recreational species in the Gulf."},
+    {"common_name": "Cobia", "scientific_name": "Rachycentron canadum",
+     "facts": "A large, pelagic-coastal fish reaching 2 m and 68 kg. Dark brown with a distinctive flat head and bold black lateral stripe. Often found near buoys, pilings, and floating debris, and will follow large rays, sharks, and turtles. Solitary or in small groups. Fast-growing, reaching sexual maturity in 2\u20133 years. Excellent table fare with firm, white flesh. Increasingly aquacultured worldwide."},
+    {"common_name": "Gray Triggerfish", "scientific_name": "Balistes capriscus",
+     "facts": "A distinctive reef-associated fish with an oval, laterally compressed body and rough skin, reaching 60 cm. Gray to olive with blue markings. Named for the locking spine mechanism on the first dorsal fin. Inhabits natural and artificial reefs, especially oil platforms. Feeds on crabs, sea urchins, and mollusks using powerful jaw. Popular pan fish; managed under the GMFMC Reef Fish FMP."},
+    {"common_name": "Wahoo", "scientific_name": "Acanthocybium solandri",
+     "facts": "An extremely fast pelagic scombrid reaching 2.5 m and 83 kg, capable of speeds over 95 km/h. Iridescent blue above with vivid blue vertical bars on silvery sides. Elongated, torpedo-shaped body with a long, pointed snout. Solitary or in loose aggregations near current edges, temperature breaks, and blue water. Feeds on squid and fish. Prized as one of the finest-eating offshore game fish."},
+    {"common_name": "Southern Flounder", "scientific_name": "Paralichthys lethostigma",
+     "facts": "The largest Gulf flatfish, reaching 90 cm and 9 kg. Left-eyed, with cryptic olive-brown coloration on the eyed side. Masters of camouflage, lying partially buried on sandy and muddy bottoms in estuaries, bays, and nearshore Gulf waters. Ambush predators of shrimp and small fish. Important recreational gigging and hook-and-line species. Migrates offshore to spawn in fall and winter."},
+    {"common_name": "Black Drum", "scientific_name": "Pogonias cromis",
+     "facts": "A large, heavy-bodied sciaenid reaching 170 cm and 51 kg, the largest member of the drum family. Grayish-black with barbels on the lower jaw. Juveniles bear 4\u20136 dark vertical bars. Pharyngeal teeth crush oysters, clams, and crabs. Found in estuaries, nearshore reefs, and around bridge pilings. Produces resonant drumming with swim bladder muscles. Long-lived, reaching 60+ years."},
+    {"common_name": "Sheepshead", "scientific_name": "Archosargus probatocephalus",
+     "facts": "A distinctive sparid with 5\u20137 bold black vertical bars on silvery sides, reaching 90 cm and 10 kg. Human-like incisors and heavy molars for crushing barnacles, oysters, clams, and crabs. Found near pilings, jetties, bridge supports, and oyster reefs. Spawns offshore in late winter to early spring. Excellent eating with firm, sweet white flesh."},
+    {"common_name": "Vermilion Snapper", "scientific_name": "Rhomboplites aurorubens",
+     "facts": "A mid-sized snapper reaching 60 cm. Vermilion-red above fading to pale pink below, with yellow streaks along scale rows. Occurs in large schools over hard-bottom reefs and rocky ledges at 40\u2013300 m. Fast-growing compared to red snapper, reaching maturity by age 2. Feeds on small fish, shrimp, crabs, and cephalopods. Commercially harvested by hook-and-line; managed under the GMFMC Reef Fish FMP."},
+    {"common_name": "Lane Snapper", "scientific_name": "Lutjanus synagris",
+     "facts": "A colorful, mid-sized snapper reaching 60 cm with a rosy body marked by yellow horizontal stripes and a prominent dark spot below the soft dorsal fin. Common over reefs, seagrass beds, and sandy bottoms in nearshore and offshore waters. Spawns from March through September. Feeds on fish, shrimp, crabs, and worms. Popular with recreational anglers and valued commercially."},
+    {"common_name": "Gag Grouper", "scientific_name": "Mycteroperca microlepis",
+     "facts": "A large serranid reaching 145 cm and 36 kg. Gray-brown with darker kiss-shaped markings forming a reticulated pattern. Protogynous hermaphrodite. Juveniles inhabit seagrass beds; adults transition to offshore reefs and hard-bottom habitats. Forms spawning aggregations on the continental shelf edge in winter. Excellent food fish; one of the most important commercially harvested groupers in the eastern Gulf."},
+    {"common_name": "Tripletail", "scientific_name": "Lobotes surinamensis",
+     "facts": "A distinctive coastal pelagic fish reaching 110 cm and 20 kg. Named for its elongated dorsal and anal fins that together with the caudal fin give the appearance of three tails. Dark olive to brown, sometimes mottled. Floats on its side near the surface alongside floating debris, buoys, and crab trap floats\u2014mimicking a dead leaf. Excellent table fare with firm, white flesh."},
+    {"common_name": "Florida Pompano", "scientific_name": "Trachinotus carolinus",
+     "facts": "A deep-bodied, laterally compressed jack reaching 64 cm and 3.6 kg. Silvery overall with a greenish-blue dorsal surface and yellow on the throat, belly, and fin margins. Inhabits surf zones, sandy beaches, and passes. Feeds on sand fleas (mole crabs), clams, and small crustaceans. Among the highest-priced commercial food fish in the Gulf due to its sweet, delicate flesh. Popular surf fishing target."},
+    {"common_name": "Spanish Mackerel", "scientific_name": "Scomberomorus maculatus",
+     "facts": "A streamlined, fast-swimming coastal pelagic reaching 91 cm. Iridescent blue-green above with silvery sides covered in golden-orange oval spots. Highly migratory along the coast, schooling in large numbers near beaches, passes, and piers. Feeds on small fish and shrimp. Important commercial and recreational species; flesh is oily and best prepared smoked or grilled."},
+]
 
 TREE_FAMILIES = {
     "Pinaceae", "Cupressaceae", "Taxaceae", "Fagaceae", "Betulaceae",
@@ -1626,11 +1865,7 @@ def beaufort_label(wind_kmh: float) -> str:
 
 def compute_weather_forecast(lat: float, lng: float,
                              start_date: str, end_date: str) -> str:
-    """Fetch daily weather from Open-Meteo and return HTML widget.
-
-    Uses forecast_days=16 for maximum range.  When the trip dates exceed
-    the forecast horizon, fetches whatever is available now.
-    """
+    """Fetch daily weather + marine seas from Open-Meteo and return HTML widget."""
     from datetime import datetime as _dt
     d0 = _dt.strptime(start_date, "%Y%m%d").date()
     d1 = _dt.strptime(end_date, "%Y%m%d").date()
@@ -1639,7 +1874,7 @@ def compute_weather_forecast(lat: float, lng: float,
         f"https://api.open-meteo.com/v1/forecast?"
         f"latitude={lat}&longitude={lng}"
         f"&daily=weather_code,temperature_2m_max,temperature_2m_min,"
-        f"wind_speed_10m_max,wind_gusts_10m_max,sunrise,sunset"
+        f"wind_speed_10m_max,sunrise,sunset"
         f"&temperature_unit=fahrenheit&wind_speed_unit=mph"
         f"&timezone=America%2FChicago"
         f"&forecast_days=16"
@@ -1657,7 +1892,27 @@ def compute_weather_forecast(lat: float, lng: float,
     if not all_dates:
         return ""
 
-    # Filter to trip date range; if none overlap, use last available days
+    marine_waves: dict[str, float] = {}
+    try:
+        marine_url = (
+            f"https://marine-api.open-meteo.com/v1/marine?"
+            f"latitude={lat}&longitude={lng}"
+            f"&daily=wave_height_max"
+            f"&timezone=America%2FChicago"
+            f"&forecast_days=16"
+        )
+        mr = requests.get(marine_url, headers=HEADERS, timeout=15)
+        mr.raise_for_status()
+        md = mr.json().get("daily", {})
+        m_dates = md.get("time", [])
+        m_waves = md.get("wave_height_max", [])
+        for k, dt_str in enumerate(m_dates):
+            if k < len(m_waves) and m_waves[k] is not None:
+                marine_waves[dt_str] = m_waves[k]
+        log.info("  Marine forecast: %d days of wave data", len(marine_waves))
+    except Exception as e:
+        log.warning("Marine forecast fetch failed: %s", e)
+
     dates = []
     indices = []
     for i, ds in enumerate(all_dates):
@@ -1668,13 +1923,12 @@ def compute_weather_forecast(lat: float, lng: float,
 
     partial_note = ""
     if not dates and all_dates:
-        # Trip is beyond forecast horizon; show last few available days
         n = min(len(all_dates), (d1 - d0).days + 1, 8)
         dates = all_dates[-n:]
         indices = list(range(len(all_dates) - n, len(all_dates)))
         partial_note = (
             '<div style="font-size:10px;color:#999;margin-top:4px">'
-            f'Extended forecast not yet available for {d0.strftime("%b %-d")}–'
+            f'Extended forecast not yet available for {d0.strftime("%b %-d")}\u2013'
             f'{d1.strftime("%b %-d")}; showing nearest available days.</div>'
         )
 
@@ -1685,7 +1939,6 @@ def compute_weather_forecast(lat: float, lng: float,
     t_max = data.get("temperature_2m_max", [])
     t_min = data.get("temperature_2m_min", [])
     wind_max = data.get("wind_speed_10m_max", [])
-    gusts = data.get("wind_gusts_10m_max", [])
     sunrise = data.get("sunrise", [])
     sunset = data.get("sunset", [])
 
@@ -1703,22 +1956,26 @@ def compute_weather_forecast(lat: float, lng: float,
         day_label = dd.strftime("%a %b %-d")
         code = codes[i] if i < len(codes) else 0
         desc, icon = WMO_WEATHER.get(code, WMO_WEATHER.get(0))
-        hi = f"{t_max[i]:.0f}" if i < len(t_max) and t_max[i] is not None else "—"
-        lo = f"{t_min[i]:.0f}" if i < len(t_min) and t_min[i] is not None else "—"
+        hi = f"{t_max[i]:.0f}" if i < len(t_max) and t_max[i] is not None else "\u2014"
+        lo = f"{t_min[i]:.0f}" if i < len(t_min) and t_min[i] is not None else "\u2014"
         w = wind_max[i] if i < len(wind_max) and wind_max[i] is not None else 0
-        g = gusts[i] if i < len(gusts) and gusts[i] is not None else 0
-        bf = beaufort_label(w * 1.609)  # mph -> km/h
-        sr = _fmt12(sunrise[i]) if i < len(sunrise) and sunrise[i] else "—"
-        ss = _fmt12(sunset[i]) if i < len(sunset) and sunset[i] else "—"
+        sr = _fmt12(sunrise[i]) if i < len(sunrise) and sunrise[i] else "\u2014"
+        ss = _fmt12(sunset[i]) if i < len(sunset) and sunset[i] else "\u2014"
+
+        wave_m = marine_waves.get(d)
+        seas_line = ""
+        if wave_m is not None:
+            wave_ft = wave_m * 3.281
+            seas_line = f'<div class="wx-seas">\U0001f30a Seas {wave_ft:.1f} ft</div>'
 
         cards.append(
             f'<div class="wx-day">'
             f'<div class="wx-date">{day_label}</div>'
             f'<div class="wx-icon">{icon}</div>'
             f'<div class="wx-desc">{desc}</div>'
-            f'<div class="wx-temp">{hi}° / {lo}°F</div>'
-            f'<div class="wx-wind">\U0001f4a8 {w:.0f} mph ({bf})'
-            f'{f", gusts {g:.0f}" if g > w + 2 else ""}</div>'
+            f'<div class="wx-temp">{hi}\u00b0 / {lo}\u00b0F</div>'
+            f'<div class="wx-wind">\U0001f4a8 {w:.0f} mph</div>'
+            f'{seas_line}'
             f'<div class="wx-sun">\u2600 {sr} \u2013 {ss}</div>'
             f'</div>'
         )
@@ -2559,6 +2816,10 @@ def run_sea_life(cfg: dict) -> list[dict]:
 
     seen_species: set[str] = set()
     for taxon_id, group_name in SEA_LIFE_TAXON_IDS.items():
+        if taxon_id == 47178:
+            log.info("\nSkipping iNat Fish query; using curated Gulf fish list (%d species)",
+                     len(GULF_FISH_SPECIES))
+            continue
         log.info("\nQuerying iNaturalist for %s (taxon %d)...", group_name, taxon_id)
         inat_data = inat_species_for_month(
             taxon_id, cfg["lat"], cfg["lng"], cfg["radius"], months_str,
@@ -2579,6 +2840,43 @@ def run_sea_life(cfg: dict) -> list[dict]:
                 "group": group_name,
             })
         time.sleep(0.5)
+
+    log.info("\nResolving iNaturalist taxon IDs for curated Gulf fish...")
+    for fish in GULF_FISH_SPECIES:
+        sci = fish["scientific_name"]
+        if sci in seen_species:
+            continue
+        seen_species.add(sci)
+        tid = None
+        try:
+            tr = requests.get(
+                f"{INAT_API}/taxa",
+                params={"q": sci, "per_page": 3, "is_active": "true"},
+                headers=HEADERS, timeout=15,
+            )
+            for t in tr.json().get("results", []):
+                if t.get("name", "").lower() == sci.lower():
+                    tid = t["id"]
+                    break
+            if not tid:
+                results = tr.json().get("results", [])
+                if results:
+                    tid = results[0]["id"]
+        except Exception:
+            pass
+        species_list.append({
+            "common_name": fish["common_name"],
+            "scientific_name": sci,
+            "inat_count": 0,
+            "taxon_id": tid,
+            "ancestor_ids": [],
+            "default_photo": None,
+            "group": "Fish",
+            "facts": fish.get("facts", ""),
+            "desc_source": "Curated",
+        })
+        log.info("  %s -> iNat taxon %s", fish["common_name"], tid or "not found")
+        time.sleep(0.3)
 
     # ── Supplement Seaweed & Algae from OBIS ──────────────────────────
     sea_cache_path = cfg["output_dir"] / ".sea_cache.json"
@@ -2708,6 +3006,8 @@ def run_sea_life(cfg: dict) -> list[dict]:
     log.info("\nFetching Wikipedia descriptions for sea life (full intro)...")
     fetched_wp = 0
     for i, entry in enumerate(species_list):
+        if entry.get("desc_source") == "Curated" and entry.get("facts"):
+            continue
         sci = entry["scientific_name"]
         cache_key = f"wiki_{sci.replace(' ', '_')}"
         cached = sea_cache.get(cache_key, {})
@@ -2730,6 +3030,17 @@ def run_sea_life(cfg: dict) -> list[dict]:
             log.info("    No Wikipedia data")
         time.sleep(0.4)
     log.info("  Fetched %d new Wikipedia descriptions", fetched_wp)
+
+    sw_overrides = 0
+    for entry in species_list:
+        if entry.get("group") == "Seaweed & Algae":
+            sci = entry.get("scientific_name", "")
+            curated = SEAWEED_CHARACTERISTICS.get(sci)
+            if curated:
+                entry["facts"] = curated
+                entry["desc_source"] = "Curated"
+                sw_overrides += 1
+    log.info("  Applied curated seaweed descriptions: %d species", sw_overrides)
 
     log.info("\nEnriching sea life with WoRMS taxonomy & attributes...")
     worms_hits = 0
@@ -2806,6 +3117,67 @@ def run_sea_life(cfg: dict) -> list[dict]:
             if entry.get("image_1"):
                 success += 1
             time.sleep(0.3)
+
+        retry_count = 0
+        for entry in species_list:
+            if entry.get("image_1") or entry.get("group") != "Seaweed & Algae":
+                continue
+            sci = entry["scientific_name"]
+            name = entry["common_name"]
+            group_dir = out_dir / safe_filename(entry["group"])
+            base = safe_filename(name)
+            dest1 = group_dir / f"{base}_1.jpg"
+            if dest1.exists() and dest1.stat().st_size > 1000:
+                entry["image_1"] = str(dest1.relative_to(cfg["output_dir"]))
+                continue
+            log.info("  Seaweed image retry: %s (%s)", name, sci)
+            photo_urls = []
+            try:
+                sr = requests.get(
+                    f"{INAT_API}/taxa",
+                    params={"q": sci, "per_page": 5, "is_active": "true"},
+                    headers=HEADERS, timeout=15,
+                )
+                for t in sr.json().get("results", []):
+                    dp = t.get("default_photo", {})
+                    url = dp.get("medium_url") or dp.get("url", "")
+                    if url:
+                        photo_urls.append(url.replace("/medium.", "/large.").replace("/square.", "/large."))
+                        break
+            except Exception:
+                pass
+            if not photo_urls:
+                try:
+                    wmc = requests.get(
+                        "https://commons.wikimedia.org/w/api.php",
+                        params={
+                            "action": "query", "generator": "search",
+                            "gsrsearch": f"filetype:bitmap {sci}",
+                            "gsrlimit": "3", "prop": "imageinfo",
+                            "iiprop": "url", "iiurlwidth": "800",
+                            "format": "json",
+                        },
+                        headers=HEADERS, timeout=15,
+                    )
+                    pages = wmc.json().get("query", {}).get("pages", {})
+                    for pid in sorted(pages.keys()):
+                        ii = pages[pid].get("imageinfo", [{}])[0]
+                        thumb = ii.get("thumburl") or ii.get("url", "")
+                        if thumb and not thumb.endswith(".svg"):
+                            photo_urls.append(thumb)
+                            break
+                except Exception:
+                    pass
+            for url in photo_urls:
+                if download_image(url, dest1):
+                    entry["image_1"] = str(dest1.relative_to(cfg["output_dir"]))
+                    retry_count += 1
+                    success += 1
+                    break
+            time.sleep(0.4)
+        if retry_count:
+            log.info("  Seaweed image retry recovered %d images", retry_count)
+
         log.info("  Images for %d / %d sea life species", success, len(species_list))
     else:
         for entry in species_list:
@@ -2916,36 +3288,36 @@ def build_sea_life_card(entry: dict, current_month_0: int, cfg: dict) -> str:
 CSS = """\
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--bg:#fff;--card:#fff;--text:#1a1a1a;--muted:#707070;--border:#d0d0d0;--accent:#444}
-body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans','Helvetica Neue',system-ui,sans-serif;font-size:15px;line-height:1.6}
+body{background:var(--bg);color:var(--text);font-family:Georgia,'Times New Roman',serif;font-size:15px;line-height:1.6}
 a{color:inherit;text-decoration:none}
 .layout{display:flex;min-height:100vh}
 .sidebar{position:sticky;top:0;height:100vh;width:220px;flex-shrink:0;background:#fafafa;border-right:1px solid var(--border);overflow-y:auto;padding:10px 0}
 .sidebar-head{padding:0 16px 10px}
-.mode-toggle{display:flex;margin:8px 16px 8px;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.mode-toggle{display:flex;margin:18px 16px 8px;border:1px solid var(--border);border-radius:6px;overflow:hidden}
 .mode-toggle .mode-btn{flex:1}
-.mode-btn{padding:7px 0;font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;text-align:center;cursor:pointer;border:none;background:transparent;color:var(--muted);font-family:'IBM Plex Sans','Helvetica Neue',system-ui,sans-serif;transition:background .2s,color .2s}
+.mode-btn{padding:7px 0;font-size:9px;font-weight:600;letter-spacing:.5px;text-align:center;cursor:pointer;border:none;background:transparent;color:var(--muted);font-family:Georgia,'Times New Roman',serif;transition:background .2s,color .2s}
 .mode-btn.active{background:var(--text);color:#fff}
 .nav-links{padding:12px 8px}
 .nav-link{display:flex;align-items:center;gap:6px;padding:6px 10px;font-size:12px;font-weight:500;color:var(--muted)}
 .nav-link:hover{color:var(--text)}
 .nav-link.active{color:var(--text);font-weight:600}
-.nav-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
 .nav-count{margin-left:auto;font-size:10px;opacity:.5}
 .main{flex:1;max-width:1200px;padding:8px 40px 80px}
 .page-header{text-align:left;padding:8px 0 12px;border-bottom:1px solid var(--border);margin-bottom:12px}
-.page-header h1{font-family:'IBM Plex Serif',Georgia,serif;font-size:26px;font-weight:600;letter-spacing:-.2px}
+.page-header h1{font-family:Georgia,'Times New Roman',serif;font-size:26px;font-weight:600;letter-spacing:-.2px}
 .page-header .sub{font-size:13px;color:var(--muted);margin-top:2px}
-.page-header .meta-line{font-size:12px;color:var(--muted);margin-top:4px;font-family:'IBM Plex Mono',monospace;display:flex;gap:16px;flex-wrap:wrap}
+.page-header .meta-line{font-size:12px;color:var(--muted);margin-top:4px;font-family:'Courier New',monospace;display:flex;gap:16px;flex-wrap:wrap}
 .page-header .locations{font-size:11px;color:var(--muted);margin-top:3px;letter-spacing:.2px}
 .trip-info{padding:0;margin-bottom:12px}
 .wx-forecast{margin-bottom:12px}
 .wx-grid{display:flex;gap:6px;flex-wrap:wrap}
-.wx-day{flex:0 0 auto;width:100px;padding:8px;border:1px solid var(--border);border-radius:6px;text-align:center;font-size:11px;line-height:1.4;background:#fafafa}
+.wx-day{flex:0 0 auto;width:130px;padding:8px;border:1px solid var(--border);border-radius:6px;text-align:center;font-size:11px;line-height:1.4;background:#fafafa}
 .wx-date{font-weight:600;font-size:11px;margin-bottom:2px}
 .wx-icon{font-size:24px;line-height:1.2}
 .wx-desc{font-size:10px;color:#555;margin-bottom:2px}
 .wx-temp{font-weight:600;font-size:12px;margin-bottom:1px}
 .wx-wind{font-size:9px;color:var(--muted)}
+.wx-seas{font-size:9px;color:var(--muted)}
 .wx-sun{font-size:9px;color:var(--muted)}
 .trip-grid{display:flex;gap:20px}
 .trip-item{font-size:12px;line-height:1.5;color:#444}
@@ -2955,7 +3327,7 @@ a{color:inherit;text-decoration:none}
 .group-section{margin-bottom:40px}
 .group-header{display:flex;align-items:baseline;gap:10px;margin-bottom:16px;padding-top:8px;border-bottom:1px solid var(--border);padding-bottom:8px}
 .group-bar{width:3px;height:20px;flex-shrink:0}
-.group-header h2{font-family:'IBM Plex Serif',Georgia,serif;font-size:19px;font-weight:600}
+.group-header h2{font-family:Georgia,'Times New Roman',serif;font-size:19px;font-weight:600}
 .group-count{font-size:11px;color:var(--muted);margin-left:auto}
 .bird-card{background:var(--card);border:1px solid var(--border);overflow:hidden;margin-bottom:16px;display:flex;flex-direction:row;align-items:flex-start}
 .card-image{width:320px;aspect-ratio:4/3;flex-shrink:0;position:relative;background:#e8e8e8}
@@ -2965,8 +3337,8 @@ a{color:inherit;text-decoration:none}
 .card-image:hover .flip-btn{opacity:1}
 .card-body{flex:1;padding:18px 22px;display:flex;flex-direction:column;min-width:0}
 .card-top{margin-bottom:8px}
-.card-top h3{font-family:'IBM Plex Serif',Georgia,serif;font-size:18px;font-weight:600;margin-bottom:1px}
-.latin{font-size:12px;color:var(--muted);display:block;margin-bottom:5px;font-family:'IBM Plex Mono',monospace;letter-spacing:.1px}
+.card-top h3{font-family:Georgia,'Times New Roman',serif;font-size:18px;font-weight:600;margin-bottom:1px}
+.latin{font-size:12px;color:var(--muted);display:block;margin-bottom:5px;font-family:'Courier New',monospace;letter-spacing:.1px}
 .conservation{display:inline-block;font-size:10px;font-weight:600;letter-spacing:.4px;padding:2px 8px;text-transform:uppercase;border:1px solid}
 .alert-orange{color:#c45000;border-color:#c45000}
 .alert-yellow{color:#a06800;border-color:#a06800}
@@ -2980,7 +3352,7 @@ a{color:inherit;text-decoration:none}
 .season-bar{display:flex;gap:1px;margin-bottom:10px;align-items:flex-end;height:20px}
 .season-bar .mo{display:flex;flex-direction:column;align-items:center;gap:1px;flex:1}
 .season-bar .mo-bar{width:100%;border-radius:1px}
-.season-bar .mo-lbl{font-size:8px;font-family:'IBM Plex Mono',monospace;color:var(--muted);line-height:1}
+.season-bar .mo-lbl{font-size:8px;font-family:'Courier New',monospace;color:var(--muted);line-height:1}
 .s0 .mo-bar{height:2px;background:#e8e8e8}
 .s1 .mo-bar{height:5px;background:#b8cfb0}
 .s2 .mo-bar{height:11px;background:#6ea85e}
@@ -2992,7 +3364,7 @@ a{color:inherit;text-decoration:none}
 .find-bird{font-size:12px;line-height:1.6;color:var(--muted);margin-bottom:8px}
 .find-bird strong{color:var(--text);font-weight:600}
 .field-ids{margin-bottom:8px}
-.field-meas{font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--muted);margin-bottom:6px;letter-spacing:.1px}
+.field-meas{font-size:11px;font-family:'Courier New',monospace;color:var(--muted);margin-bottom:6px;letter-spacing:.1px}
 .field-id{font-size:12px;line-height:1.55;color:#444;margin-bottom:4px}
 .field-id strong{color:var(--text);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.3px;margin-right:4px}
 .bird-audio{margin:8px 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
@@ -3000,7 +3372,7 @@ a{color:inherit;text-decoration:none}
 .sounds-link{font-size:11px;color:#2E6B94;text-decoration:none;font-weight:500;letter-spacing:.2px;white-space:nowrap}
 .sounds-link:hover{text-decoration:underline}
 .card-footer{margin-top:auto;padding-top:8px;border-top:1px solid var(--border)}
-.taxonomy{font-size:10px;color:var(--muted);letter-spacing:.2px;font-family:'IBM Plex Mono',monospace}
+.taxonomy{font-size:10px;color:var(--muted);letter-spacing:.2px;font-family:'Courier New',monospace}
 .back-top{position:fixed;bottom:24px;right:24px;background:var(--text);color:var(--bg);width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;border:none;opacity:.3;transition:opacity .2s}
 .back-top:hover{opacity:.8}
 .panel{display:none}
@@ -3009,7 +3381,7 @@ a{color:inherit;text-decoration:none}
 .badge-present{background:#e8f5e9;color:#2e7d32}
 .badge-absent{background:#fce4ec;color:#c62828}
 .filter-bar{display:flex;align-items:center;gap:10px;padding:6px 0;margin-bottom:8px;flex-wrap:wrap}
-.filter-btn{font-family:'IBM Plex Sans',sans-serif;font-size:12px;padding:4px 12px;border-radius:14px;border:1.5px solid var(--muted);background:none;color:var(--text);cursor:pointer;transition:all .15s}
+.filter-btn{font-family:Georgia,'Times New Roman',serif;font-size:12px;padding:4px 12px;border-radius:14px;border:1.5px solid var(--muted);background:none;color:var(--text);cursor:pointer;transition:all .15s}
 .filter-btn:hover{border-color:var(--accent)}
 .filter-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 .bird-card.season-hidden{display:none}
@@ -3235,7 +3607,6 @@ def build_grouped_html(records: list[dict], group_order: list[str],
         count = len(groups[g])
         nav_parts.append(
             f'<a class="nav-link" href="#{gid}">'
-            f'<span class="nav-dot" style="background:{color}"></span>'
             f'{esc(g)}<span class="nav-count">{count}</span></a>'
         )
         card_parts.append(
@@ -3274,7 +3645,6 @@ def build_grouped_html(records: list[dict], group_order: list[str],
         count = len(groups[g])
         nav_parts.append(
             f'<a class="nav-link" href="#{gid}">'
-            f'<span class="nav-dot" style="background:{color}"></span>'
             f'{esc(g)}<span class="nav-count">{count}</span></a>'
         )
         card_parts.append(
@@ -3446,8 +3816,6 @@ function switchMode(mode){{
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{esc(cfg['place'])} Field Checklist</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
 <style>
 {CSS}
 </style>
