@@ -75,7 +75,7 @@ LAYER_DEFS = {
     "ebird_obs":   {"label": "eBird Obs (30 d)",     "color": "#1A6B3A", "on": False},
     "bathymetry":  {"label": "Gulf Bathymetry",      "color": "#1A5276", "on": False, "tile": True},
     "noaa_charts": {"label": "NOAA Nautical Charts", "color": "#1B4F72", "on": False, "tile": True},
-    "currents":    {"label": "Ocean Reference",       "color": "#2874A6", "on": False, "tile": True},
+    "currents":    {"label": "Ocean Surface Currents", "color": "#2874A6", "on": False, "tile": True},
 }
 
 # ─── Caching ───────────────────────────────────────────────────────
@@ -769,9 +769,10 @@ MAP_CSS = """
 HEAD_CDN = (
     '<meta http-equiv="Content-Security-Policy" content="'
     "default-src 'none';"
-    "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net;"
+    "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net;"
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com https://cdn.jsdelivr.net;"
-    "img-src 'self' data: https://cdn.download.ams.birds.cornell.edu https://*.basemaps.cartocdn.com https://*.tile.openstreetmap.org https://*.tile.opentopomap.org https://server.arcgisonline.com https://tiles.arcgis.com https://gis.charttools.noaa.gov https://unpkg.com https://inaturalist-open-data.s3.amazonaws.com https://static.inaturalist.org;"
+    "img-src 'self' data: https://cdn.download.ams.birds.cornell.edu https://*.basemaps.cartocdn.com https://*.tile.openstreetmap.org https://*.tile.opentopomap.org https://server.arcgisonline.com https://tiles.arcgis.com https://gis.charttools.noaa.gov https://unpkg.com https://inaturalist-open-data.s3.amazonaws.com https://static.inaturalist.org https://tiledimageservices.arcgis.com;"
+    "connect-src https://tiledimageservices.arcgis.com https://unpkg.com;"
     "font-src https://fonts.gstatic.com;"
     "media-src https://cdn.download.ams.birds.cornell.edu;"
     '"/>\n'
@@ -789,6 +790,10 @@ HEAD_CDN = (
     ' crossorigin="anonymous"></' + 'script>\n'
     '<script src="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"'
     ' integrity="sha384-eXVCORTRlv4FUUgS/xmOyr66XBVraen8ATNLMESp92FKXLAMiKkerixTiBvXriZr"'
+    ' crossorigin="anonymous"></' + 'script>\n'
+    '<script src="https://unpkg.com/esri-leaflet@3.0.12/dist/esri-leaflet.js"'
+    ' crossorigin="anonymous"></' + 'script>\n'
+    '<script src="https://unpkg.com/lerc@4.0.4/LercDecode.js"'
     ' crossorigin="anonymous"></' + 'script>\n'
 )
 
@@ -961,7 +966,41 @@ function initMap(){
   _mapLayers.bathymetry=L.tileLayer('https://tiles.arcgis.com/tiles/C8EMgrsFcRFL6LrL/arcgis/rest/services/Gulf_Wide_Bathymetry/MapServer/tile/{z}/{y}/{x}',{opacity:0.5,maxZoom:10,pane:'tileOverlays',attribution:'NOAA NCEI Gulf Bathymetry'});
   var NOAAChartLayer=L.TileLayer.extend({getTileUrl:function(coords){var z=Math.max(0,coords.z-2);return 'https://gis.charttools.noaa.gov/arcgis/rest/services/MarineChart_Services/NOAACharts/MapServer/WMTS/tile/1.0.0/MarineChart_Services_NOAACharts/default/GoogleMapsCompatible/'+z+'/'+coords.y+'/'+coords.x+'.png';}});
   _mapLayers.noaa_charts=new NOAAChartLayer('',{opacity:0.6,minZoom:3,maxZoom:17,pane:'tileOverlays',attribution:'NOAA Chart Display'});
-  _mapLayers.currents=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Reference/MapServer/tile/{z}/{y}/{x}',{opacity:0.8,pane:'tileOverlays',attribution:'Esri Ocean Reference'});
+  _mapLayers.currents=(function(){
+    var cvs=document.createElement('canvas');
+    var base='https://tiledimageservices.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/annual_drifter_mean_v3/ImageServer/tile';
+    var overlay=L.imageOverlay('',[[0,0],[0,0]],{opacity:0.65,pane:'tileOverlays',attribution:'NOAA AOML Ocean Surface Currents 2005\u20132023'});
+    overlay._renderCurrents=function(){
+      var self=this;
+      Lerc.load({locateFile:function(f){return 'https://unpkg.com/lerc@4.0.4/'+f;}}).then(function(){
+        var tiles=[[2,0,0],[2,0,1],[2,0,2],[2,0,3],[2,0,4],[2,0,5],[2,1,0],[2,1,1],[2,1,2],[2,1,3],[2,1,4],[2,1,5]];
+        var tw=256,th=256,cols=6,rows=2;
+        cvs.width=cols*tw;cvs.height=rows*th;
+        var ctx=cvs.getContext('2d');
+        var loaded=0;
+        tiles.forEach(function(t){
+          var lv=t[0],r=t[1],c=t[2];
+          fetch(base+'/'+lv+'/'+r+'/'+c).then(function(resp){return resp.arrayBuffer();}).then(function(buf){
+            try{
+              var d=Lerc.decode(buf);
+              var mag=d.pixels[0],w=d.width,h=d.height;
+              var img=ctx.createImageData(w,h);
+              for(var i=0;i<w*h;i++){
+                var v=mag[i],p=i*4;
+                if(v>1e30||v<1e-6){img.data[p+3]=0;}
+                else{var n=Math.min(v/0.8,1);img.data[p]=Math.round(20+n*210);img.data[p+1]=Math.round(80-n*50);img.data[p+2]=Math.round(200-n*170);img.data[p+3]=Math.round(100+n*155);}
+              }
+              ctx.putImageData(img,c*tw,r*th);
+            }catch(e){console.warn('LERC decode err',e);}
+            loaded++;
+            if(loaded===tiles.length){self.setUrl(cvs.toDataURL());self.setBounds([[-73,-180],[85,180]]);}
+          }).catch(function(e){console.warn('tile fetch err',e);loaded++;});
+        });
+      }).catch(function(e){console.warn('Lerc.load err',e);});
+    };
+    overlay.onAdd=function(map){L.ImageOverlay.prototype.onAdd.call(this,map);this._renderCurrents();};
+    return overlay;
+  })();
 
   var defaults=__DEFAULTS_OBJ__;
   for(var k in _mapLayers){if(defaults[k])_mapLayers[k].addTo(_map);}
