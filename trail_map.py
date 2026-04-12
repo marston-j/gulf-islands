@@ -927,7 +927,7 @@ function initMap(){
 
   _mapLayers.bathymetry=L.tileLayer('https://tiles.arcgis.com/tiles/C8EMgrsFcRFL6LrL/arcgis/rest/services/Gulf_Wide_Bathymetry/MapServer/tile/{z}/{y}/{x}',{opacity:0.5,maxZoom:10,attribution:'NOAA NCEI Gulf Bathymetry'});
   _mapLayers.noaa_charts=L.tileLayer('https://gis.charttools.noaa.gov/arcgis/rest/services/MarineChart_Services/NOAACharts/MapServer/tile/{z}/{y}/{x}',{opacity:0.6,attribution:'NOAA Chart Display'});
-  _mapLayers.currents=L.tileLayer.wms('https://tiledimageservices.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/annual_drifter_mean_v3/ImageServer/WMSServer',{layers:'0',format:'image/png',transparent:true,opacity:0.6,attribution:'NOAA/AOML Ocean Currents'});
+  _mapLayers.currents=L.tileLayer('https://tiledimageservices.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/annual_drifter_mean_v3/ImageServer/tile/{z}/{y}/{x}',{opacity:0.6,maxZoom:2,attribution:'NOAA/AOML Ocean Currents'});
 
   var defaults=__DEFAULTS_OBJ__;
   for(var k in _mapLayers){if(defaults[k])_mapLayers[k].addTo(_map);}
