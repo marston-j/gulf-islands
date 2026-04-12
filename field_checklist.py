@@ -2874,6 +2874,7 @@ def run_sea_life(cfg: dict) -> list[dict]:
             "group": "Fish",
             "facts": fish.get("facts", ""),
             "desc_source": "Curated",
+            "seasonality": [2] * 12,
         })
         log.info("  %s -> iNat taxon %s", fish["common_name"], tid or "not found")
         time.sleep(0.3)
@@ -2987,6 +2988,8 @@ def run_sea_life(cfg: dict) -> list[dict]:
     for i, entry in enumerate(species_list):
         if entry.get("data_source") == "OBIS":
             entry["seasonality"] = [1] * 12
+            continue
+        if entry.get("desc_source") == "Curated" and entry.get("seasonality"):
             continue
         tid = entry.get("taxon_id")
         if not tid:
@@ -3288,14 +3291,14 @@ def build_sea_life_card(entry: dict, current_month_0: int, cfg: dict) -> str:
 CSS = """\
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--bg:#fff;--card:#fff;--text:#1a1a1a;--muted:#707070;--border:#d0d0d0;--accent:#444}
-body{background:var(--bg);color:var(--text);font-family:Georgia,'Times New Roman',serif;font-size:15px;line-height:1.6}
+body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans','Helvetica Neue',system-ui,sans-serif;font-size:15px;line-height:1.6}
 a{color:inherit;text-decoration:none}
 .layout{display:flex;min-height:100vh}
 .sidebar{position:sticky;top:0;height:100vh;width:220px;flex-shrink:0;background:#fafafa;border-right:1px solid var(--border);overflow-y:auto;padding:10px 0}
 .sidebar-head{padding:0 16px 10px}
 .mode-toggle{display:flex;margin:18px 16px 8px;border:1px solid var(--border);border-radius:6px;overflow:hidden}
 .mode-toggle .mode-btn{flex:1}
-.mode-btn{padding:7px 0;font-size:9px;font-weight:600;letter-spacing:.5px;text-align:center;cursor:pointer;border:none;background:transparent;color:var(--muted);font-family:Georgia,'Times New Roman',serif;transition:background .2s,color .2s}
+.mode-btn{padding:7px 0;font-size:9px;font-weight:600;letter-spacing:.5px;text-align:center;cursor:pointer;border:none;background:transparent;color:var(--muted);font-family:'IBM Plex Sans','Helvetica Neue',system-ui,sans-serif;transition:background .2s,color .2s}
 .mode-btn.active{background:var(--text);color:#fff}
 .nav-links{padding:12px 8px}
 .nav-link{display:flex;align-items:center;gap:6px;padding:6px 10px;font-size:12px;font-weight:500;color:var(--muted)}
@@ -3304,9 +3307,9 @@ a{color:inherit;text-decoration:none}
 .nav-count{margin-left:auto;font-size:10px;opacity:.5}
 .main{flex:1;max-width:1200px;padding:8px 40px 80px}
 .page-header{text-align:left;padding:8px 0 12px;border-bottom:1px solid var(--border);margin-bottom:12px}
-.page-header h1{font-family:Georgia,'Times New Roman',serif;font-size:26px;font-weight:600;letter-spacing:-.2px}
+.page-header h1{font-family:'IBM Plex Serif',Georgia,serif;font-size:26px;font-weight:600;letter-spacing:-.2px}
 .page-header .sub{font-size:13px;color:var(--muted);margin-top:2px}
-.page-header .meta-line{font-size:12px;color:var(--muted);margin-top:4px;font-family:'Courier New',monospace;display:flex;gap:16px;flex-wrap:wrap}
+.page-header .meta-line{font-size:12px;color:var(--muted);margin-top:4px;font-family:'IBM Plex Mono',monospace;display:flex;gap:16px;flex-wrap:wrap}
 .page-header .locations{font-size:11px;color:var(--muted);margin-top:3px;letter-spacing:.2px}
 .trip-info{padding:0;margin-bottom:12px}
 .wx-forecast{margin-bottom:12px}
@@ -3327,7 +3330,7 @@ a{color:inherit;text-decoration:none}
 .group-section{margin-bottom:40px}
 .group-header{display:flex;align-items:baseline;gap:10px;margin-bottom:16px;padding-top:8px;border-bottom:1px solid var(--border);padding-bottom:8px}
 .group-bar{width:3px;height:20px;flex-shrink:0}
-.group-header h2{font-family:Georgia,'Times New Roman',serif;font-size:19px;font-weight:600}
+.group-header h2{font-family:'IBM Plex Serif',Georgia,serif;font-size:19px;font-weight:600}
 .group-count{font-size:11px;color:var(--muted);margin-left:auto}
 .bird-card{background:var(--card);border:1px solid var(--border);overflow:hidden;margin-bottom:16px;display:flex;flex-direction:row;align-items:flex-start}
 .card-image{width:320px;aspect-ratio:4/3;flex-shrink:0;position:relative;background:#e8e8e8}
@@ -3337,8 +3340,8 @@ a{color:inherit;text-decoration:none}
 .card-image:hover .flip-btn{opacity:1}
 .card-body{flex:1;padding:18px 22px;display:flex;flex-direction:column;min-width:0}
 .card-top{margin-bottom:8px}
-.card-top h3{font-family:Georgia,'Times New Roman',serif;font-size:18px;font-weight:600;margin-bottom:1px}
-.latin{font-size:12px;color:var(--muted);display:block;margin-bottom:5px;font-family:'Courier New',monospace;letter-spacing:.1px}
+.card-top h3{font-family:'IBM Plex Serif',Georgia,serif;font-size:18px;font-weight:600;margin-bottom:1px}
+.latin{font-size:12px;color:var(--muted);display:block;margin-bottom:5px;font-family:'IBM Plex Mono',monospace;letter-spacing:.1px}
 .conservation{display:inline-block;font-size:10px;font-weight:600;letter-spacing:.4px;padding:2px 8px;text-transform:uppercase;border:1px solid}
 .alert-orange{color:#c45000;border-color:#c45000}
 .alert-yellow{color:#a06800;border-color:#a06800}
@@ -3352,7 +3355,7 @@ a{color:inherit;text-decoration:none}
 .season-bar{display:flex;gap:1px;margin-bottom:10px;align-items:flex-end;height:20px}
 .season-bar .mo{display:flex;flex-direction:column;align-items:center;gap:1px;flex:1}
 .season-bar .mo-bar{width:100%;border-radius:1px}
-.season-bar .mo-lbl{font-size:8px;font-family:'Courier New',monospace;color:var(--muted);line-height:1}
+.season-bar .mo-lbl{font-size:8px;font-family:'IBM Plex Mono',monospace;color:var(--muted);line-height:1}
 .s0 .mo-bar{height:2px;background:#e8e8e8}
 .s1 .mo-bar{height:5px;background:#b8cfb0}
 .s2 .mo-bar{height:11px;background:#6ea85e}
@@ -3364,7 +3367,7 @@ a{color:inherit;text-decoration:none}
 .find-bird{font-size:12px;line-height:1.6;color:var(--muted);margin-bottom:8px}
 .find-bird strong{color:var(--text);font-weight:600}
 .field-ids{margin-bottom:8px}
-.field-meas{font-size:11px;font-family:'Courier New',monospace;color:var(--muted);margin-bottom:6px;letter-spacing:.1px}
+.field-meas{font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--muted);margin-bottom:6px;letter-spacing:.1px}
 .field-id{font-size:12px;line-height:1.55;color:#444;margin-bottom:4px}
 .field-id strong{color:var(--text);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.3px;margin-right:4px}
 .bird-audio{margin:8px 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
@@ -3372,7 +3375,7 @@ a{color:inherit;text-decoration:none}
 .sounds-link{font-size:11px;color:#2E6B94;text-decoration:none;font-weight:500;letter-spacing:.2px;white-space:nowrap}
 .sounds-link:hover{text-decoration:underline}
 .card-footer{margin-top:auto;padding-top:8px;border-top:1px solid var(--border)}
-.taxonomy{font-size:10px;color:var(--muted);letter-spacing:.2px;font-family:'Courier New',monospace}
+.taxonomy{font-size:10px;color:var(--muted);letter-spacing:.2px;font-family:'IBM Plex Mono',monospace}
 .back-top{position:fixed;bottom:24px;right:24px;background:var(--text);color:var(--bg);width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;border:none;opacity:.3;transition:opacity .2s}
 .back-top:hover{opacity:.8}
 .panel{display:none}
@@ -3381,7 +3384,7 @@ a{color:inherit;text-decoration:none}
 .badge-present{background:#e8f5e9;color:#2e7d32}
 .badge-absent{background:#fce4ec;color:#c62828}
 .filter-bar{display:flex;align-items:center;gap:10px;padding:6px 0;margin-bottom:8px;flex-wrap:wrap}
-.filter-btn{font-family:Georgia,'Times New Roman',serif;font-size:12px;padding:4px 12px;border-radius:14px;border:1.5px solid var(--muted);background:none;color:var(--text);cursor:pointer;transition:all .15s}
+.filter-btn{font-family:'IBM Plex Sans',sans-serif;font-size:12px;padding:4px 12px;border-radius:14px;border:1.5px solid var(--muted);background:none;color:var(--text);cursor:pointer;transition:all .15s}
 .filter-btn:hover{border-color:var(--accent)}
 .filter-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 .bird-card.season-hidden{display:none}
@@ -3816,6 +3819,8 @@ function switchMode(mode){{
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{esc(cfg['place'])} Field Checklist</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
 <style>
 {CSS}
 </style>
@@ -3969,6 +3974,8 @@ Example:
     parser.add_argument("--skip-images", action="store_true", help="Skip downloading images")
     parser.add_argument("--birds-only", action="store_true", help="Only run bird pipeline")
     parser.add_argument("--plants-only", action="store_true", help="Only run plant pipeline")
+    parser.add_argument("--render-only", action="store_true",
+                        help="Skip all API calls; rebuild HTML from cached snapshot")
 
     args = parser.parse_args()
 
@@ -3977,15 +3984,50 @@ Example:
     except ValueError:
         parser.error("Date must be YYYY-MM-DD format")
 
+    output_dir = args.output or Path("output") / place_slug(args.place)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    snapshot_path = output_dir / ".snapshot.json"
+
+    # ── render-only: reload cached data, skip all API calls ──────────
+    if args.render_only:
+        if not snapshot_path.exists():
+            parser.error(f"--render-only requires a snapshot file at {snapshot_path}. "
+                         "Run a full build first.")
+        log.info("Field Checklist Builder  [render-only mode]")
+        log.info("  Loading snapshot from %s", snapshot_path)
+        snap = json.loads(snapshot_path.read_text())
+        birds = snap.get("birds", [])
+        plants = snap.get("plants", [])
+        sea_life = snap.get("sea_life", [])
+        cfg = {
+            "place": snap["cfg"]["place"],
+            "date": datetime.strptime(snap["cfg"]["date"], "%Y-%m-%d"),
+            "lat": snap["cfg"]["lat"],
+            "lng": snap["cfg"]["lng"],
+            "radius": snap["cfg"]["radius"],
+            "ebird_key": snap["cfg"].get("ebird_key", ""),
+            "moon": snap["cfg"].get("moon", ""),
+            "tides": snap["cfg"].get("tides", ""),
+            "output_dir": output_dir,
+            "skip_images": True,
+            "moon_html": snap["cfg"].get("moon_html", ""),
+            "weather_html": snap["cfg"].get("weather_html", ""),
+        }
+        log.info("  Birds: %d  Plants: %d  Sea Life: %d",
+                 len(birds), len(plants), len(sea_life))
+        log.info("")
+        log.info("Generating combined HTML...")
+        generate_html(birds, plants, cfg, sea_life)
+        log.info("Done!  Output: %s", output_dir / "index.html")
+        return
+
+    # ── full build: fetch everything from APIs ───────────────────────
     do_birds = not args.plants_only
     do_plants = not args.birds_only
 
     if do_birds and not args.ebird_key:
         parser.error("--ebird-key is required for birds (or set EBIRD_API_KEY env var). "
                       "Get a free key at https://ebird.org/api/keygen")
-
-    output_dir = args.output or Path("output") / place_slug(args.place)
-    output_dir.mkdir(parents=True, exist_ok=True)
 
     cfg = {
         "place": args.place,
@@ -4029,6 +4071,26 @@ Example:
             cfg["weather_html"] = compute_weather_forecast(
                 cfg["lat"], cfg["lng"], parts[0], parts[1]
             )
+
+    # ── save snapshot for future --render-only runs ──────────────────
+    def _serializable(obj):
+        if isinstance(obj, (datetime, Path)):
+            return str(obj)
+        raise TypeError(f"Not serializable: {type(obj)}")
+
+    snap_cfg = {
+        "place": cfg["place"],
+        "date": target_date.strftime("%Y-%m-%d"),
+        "lat": cfg["lat"],
+        "lng": cfg["lng"],
+        "radius": cfg["radius"],
+        "moon_html": cfg.get("moon_html", ""),
+        "weather_html": cfg.get("weather_html", ""),
+    }
+    snapshot = {"cfg": snap_cfg, "birds": birds, "plants": plants, "sea_life": sea_life}
+    snapshot_path.write_text(json.dumps(snapshot, default=_serializable, ensure_ascii=False))
+    log.info("\nSaved data snapshot to %s (%.1f MB)",
+             snapshot_path, snapshot_path.stat().st_size / 1e6)
 
     log.info("\n" + "=" * 60)
     log.info("Generating combined HTML...")

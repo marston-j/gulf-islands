@@ -721,7 +721,7 @@ MAP_CSS = """
 .map-layer-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
 .map-layer-label{flex:1}
 .map-layer-count{color:var(--muted);font-size:11px;min-width:28px;text-align:right}
-.leaflet-popup-content{font-family:Georgia,'Times New Roman',serif;font-size:13px;line-height:1.4}
+.leaflet-popup-content{font-family:'IBM Plex Sans',sans-serif;font-size:13px;line-height:1.4}
 .leaflet-popup-content b{font-weight:600}
 .popup-species{color:#1A6B3A;font-weight:500}
 .popup-meta{color:#707070;font-size:11px}
