@@ -117,7 +117,7 @@ PLANT_GROUP_COLORS = {
     "Vines": "#7a5a6a",
 }
 
-SEA_LIFE_GROUP_ORDER = ["Crustaceans", "Seaweed & Algae", "Shells", "Fish", "Jellyfish & Corals", "Echinoderms", "Marine Mammals", "Mollusks", "Marine Reptiles"]
+SEA_LIFE_GROUP_ORDER = ["Crustaceans", "Seaweed & Algae", "Shells", "Fish", "Rays & Skates", "Jellyfish & Corals", "Echinoderms", "Marine Mammals", "Mollusks", "Marine Reptiles"]
 
 SEA_LIFE_GROUP_COLORS = {
     "Fish": "#2E6B94",
@@ -127,6 +127,7 @@ SEA_LIFE_GROUP_COLORS = {
     "Jellyfish & Corals": "#7B5EA7",
     "Echinoderms": "#5A8A6A",
     "Seaweed & Algae": "#3a7a5a",
+    "Rays & Skates": "#4A7B8C",
     "Marine Reptiles": "#6B7820",
     "Marine Mammals": "#505060",
 }
@@ -3842,7 +3843,7 @@ def generate_html(birds: list[dict], plants: list[dict], cfg: dict, sea_life=Non
 <h1>{esc(cfg['place'])} Sea Life Checklist</h1>
 <div class="sub">{len(sea_life)} Species</div>
 <div class="meta-line"><span>{date_str}</span><span>{lat_str}, {lng_str}</span></div>
-<div class="locations">Sources: iNaturalist</div>
+<div class="locations">Sources: iNaturalist, OBIS, NOAA Fisheries, FWC, Wikipedia, PhycoLab</div>
 </div>
 {filter_bar}
 {trip_html}
