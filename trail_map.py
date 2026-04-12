@@ -73,6 +73,9 @@ LAYER_DEFS = {
     "inat_rare":   {"label": "Rare Species (iNat)",  "color": "#D4380D", "on": False},
     "hotspots":    {"label": "Birding Hotspots",     "color": "#8B4513", "on": True},
     "ebird_obs":   {"label": "eBird Obs (30 d)",     "color": "#1A6B3A", "on": False},
+    "bathymetry":  {"label": "Gulf Bathymetry",      "color": "#1A5276", "on": False, "tile": True},
+    "noaa_charts": {"label": "NOAA Nautical Charts", "color": "#1B4F72", "on": False, "tile": True},
+    "currents":    {"label": "Ocean Currents",       "color": "#2874A6", "on": False, "tile": True},
 }
 
 # ─── Caching ───────────────────────────────────────────────────────
@@ -922,9 +925,16 @@ function initMap(){
   }).addTo(obsCluster);
   _mapLayers.ebird_obs=obsCluster;
 
+  _mapLayers.bathymetry=L.tileLayer('https://tiles.arcgis.com/tiles/C8EMgrsFcRFL6LrL/arcgis/rest/services/Gulf_Wide_Bathymetry/MapServer/tile/{z}/{y}/{x}',{opacity:0.5,maxZoom:10,attribution:'NOAA NCEI Gulf Bathymetry'});
+  _mapLayers.noaa_charts=L.tileLayer('https://gis.charttools.noaa.gov/arcgis/rest/services/MarineChart_Services/NOAACharts/MapServer/tile/{z}/{y}/{x}',{opacity:0.6,attribution:'NOAA Chart Display'});
+  _mapLayers.currents=L.tileLayer.wms('https://tiledimageservices.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/annual_drifter_mean_v3/ImageServer/WMSServer',{layers:'0',format:'image/png',transparent:true,opacity:0.6,attribution:'NOAA/AOML Ocean Currents'});
+
   var defaults=__DEFAULTS_OBJ__;
   for(var k in _mapLayers){if(defaults[k])_mapLayers[k].addTo(_map);}
   _map.fitBounds([[__SOUTH__,__WEST__],[__NORTH__,__EAST__]]);
+
+  L.marker([30.3307,-86.1650],{icon:L.divIcon({className:'base-star',html:'<div style="text-align:center"><span style="font-size:22px;color:#D4380D;text-shadow:0 0 3px #fff">&#9733;</span><div style="font-size:9px;font-weight:600;color:#333;white-space:nowrap;margin-top:-2px;font-family:\'IBM Plex Sans\',sans-serif">Base Camp</div></div>',iconSize:[60,36],iconAnchor:[30,18]}),zIndexOffset:1000}).addTo(_map);
+
   setTimeout(function(){_map.invalidateSize();},250);
 }
 function toggleMapLayer(key,on){
@@ -953,19 +963,25 @@ def build_parts(layers: dict, bbox: tuple) -> dict:
 
     nav_items = []
     for key, ld in LAYER_DEFS.items():
+        is_tile = ld.get("tile", False)
         chk = "checked" if ld["on"] else ""
-        if key in beach_counts:
-            cnt = beach_counts[key]
+        if is_tile:
+            cnt_str = ""
+        elif key in beach_counts:
+            cnt_str = str(beach_counts[key])
+            if int(cnt_str) == 0 and not ld["on"]:
+                continue
         else:
             cnt = len(layers.get(key, {}).get("features", []))
-        if cnt == 0 and not ld["on"]:
-            continue
+            if cnt == 0 and not ld["on"]:
+                continue
+            cnt_str = str(cnt)
         nav_items.append(
             f'<label class="map-layer-toggle">'
             f'<input type="checkbox" {chk} onchange="toggleMapLayer(\'{key}\',this.checked)">'
             f'<span class="map-layer-dot" style="background:{ld["color"]}"></span>'
             f'<span class="map-layer-label">{ld["label"]}</span>'
-            f'<span class="map-layer-count">{cnt}</span>'
+            f'<span class="map-layer-count">{cnt_str}</span>'
             f'</label>'
         )
     nav_html = (

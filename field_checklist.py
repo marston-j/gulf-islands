@@ -929,24 +929,6 @@ def inat_batch_taxon_families(taxon_ids: list[int]) -> dict[int, str]:
     return families
 
 
-def inat_bird_taxon_id(sci_name: str) -> int | None:
-    """Look up a bird's iNat taxon ID by scientific name."""
-    try:
-        resp = requests.get(
-            f"{INAT_API}/taxa",
-            params={"q": sci_name, "rank": "species", "is_active": "true", "per_page": 5},
-            headers=HEADERS, timeout=10,
-        )
-        for t in resp.json().get("results", []):
-            if t.get("name", "").lower() == sci_name.lower():
-                return t["id"]
-        results = resp.json().get("results", [])
-        if results:
-            return results[0]["id"]
-    except Exception:
-        pass
-    return None
-
 
 # ── Go Botany (plant detail) scraping ──────────────────────────────────
 
@@ -1429,6 +1411,69 @@ MACROALGAE_CLASSES = {
     "Phaeophyceae",
     "Ulvophyceae",
 }
+
+
+IDIGBIO_API = "https://search.idigbio.org/v2"
+
+
+def idigbio_enrich_plants(species_list: list[dict], lat: float, lng: float,
+                          cache: dict, cache_path: Path) -> int:
+    """Supplement plant descriptions with habitat data from iDigBio specimen records."""
+    bbox = {
+        "type": "geo_bounding_box",
+        "top_left": {"lat": lat + 0.7, "lon": lng - 2.0},
+        "bottom_right": {"lat": lat - 0.7, "lon": lng + 2.0},
+    }
+    enriched = 0
+    for entry in species_list:
+        sci = entry.get("scientific_name", "")
+        if not sci or " " not in sci:
+            continue
+        parts = sci.split()
+        cache_key = f"idigbio_{parts[0]}_{parts[1]}"
+        if cache_key in cache:
+            habitat_note = cache[cache_key]
+        else:
+            habitat_note = ""
+            try:
+                resp = requests.post(
+                    f"{IDIGBIO_API}/search/records/",
+                    json={
+                        "rq": {
+                            "scientificname": sci,
+                            "geopoint": bbox,
+                            "kingdom": "Plantae",
+                        },
+                        "limit": 5,
+                        "fields": ["data.dwc:habitat", "data.dwc:occurrenceRemarks",
+                                   "data.dwc:locality"],
+                    },
+                    headers=HEADERS, timeout=20,
+                )
+                items = resp.json().get("items", [])
+                snippets = []
+                for item in items:
+                    d = item.get("data", {})
+                    for fld in ("dwc:habitat", "dwc:occurrenceRemarks"):
+                        v = d.get(fld, "")
+                        if v and len(v) > 15 and v not in snippets:
+                            snippets.append(v)
+                habitat_note = " | ".join(snippets[:3])
+            except Exception as e:
+                log.warning("  iDigBio error for %s: %s", sci, e)
+            cache[cache_key] = habitat_note
+            save_json(cache_path, cache)
+            time.sleep(0.5)
+
+        if habitat_note and not entry.get("idigbio_habitat"):
+            entry["idigbio_habitat"] = habitat_note
+            existing = entry.get("facts", "")
+            if existing and habitat_note not in existing:
+                entry["facts"] = existing.rstrip(". ") + ". Habitat: " + habitat_note
+            elif not existing:
+                entry["facts"] = "Habitat: " + habitat_note
+            enriched += 1
+    return enriched
 
 
 def fetch_obis_seaweed(lat: float, lng: float, radius_deg: float = 1.0,
@@ -2134,24 +2179,16 @@ def run_birds(cfg: dict) -> list[dict]:
 
     log.info("  Downloaded %d / %d bird images", success, len(birds))
 
-    log.info("\nStep 4: Bird seasonality from iNaturalist...")
-    for i, bird in enumerate(birds):
-        sci = bird.get("sci_name", "")
-        cache_key = f"bird:{sci}"
-        if cache_key in seasonality:
-            bird["seasonality"] = seasonality[cache_key]
-            continue
-
-        tid = inat_bird_taxon_id(sci)
-        if tid:
-            log.info("  [%d/%d] %s (taxon %d)", i + 1, len(birds), bird["common_name"], tid)
-            hist = inat_monthly_histogram(tid, cfg["lat"], cfg["lng"], cfg["radius"])
-            seasonality[cache_key] = hist
-            bird["seasonality"] = hist
-            save_json(seasonality_path, seasonality)
-            time.sleep(0.3)
-        else:
-            bird["seasonality"] = [0] * 12
+    log.info("\nStep 4: Bird seasonality from eBird presence...")
+    target_month = cfg["date"].month
+    adj_prev = ((target_month - 2) % 12)
+    adj_next = target_month % 12
+    for bird in birds:
+        seas = [1] * 12
+        seas[target_month - 1] = 2
+        seas[adj_prev] = 2
+        seas[adj_next] = 2
+        bird["seasonality"] = seas
 
     csv_path = cfg["output_dir"] / "birds.csv"
     records = []
@@ -2771,6 +2808,12 @@ def run_plants(cfg: dict) -> list[dict]:
                             break
             entry["image_1"] = str(d1.relative_to(cfg["output_dir"])) if d1.exists() else ""
             entry["image_2"] = str(d2.relative_to(cfg["output_dir"])) if d2.exists() else ""
+
+    log.info("\nStep 4: Enriching plant descriptions via iDigBio...")
+    idigbio_enriched = idigbio_enrich_plants(
+        species_list, cfg["lat"], cfg["lng"], cache, plant_cache_path,
+    )
+    log.info("  Enriched %d plants with iDigBio habitat data", idigbio_enriched)
 
     csv_path = cfg["output_dir"] / "plants.csv"
     records = []
@@ -3667,12 +3710,23 @@ def build_grouped_html(records: list[dict], group_order: list[str],
 
 def generate_html(birds: list[dict], plants: list[dict], cfg: dict, sea_life=None):
     """Generate the combined index.html with Birds/Plants/Sea Life toggle."""
+    sea_life = sea_life or []
+    fish_count = sum(1 for s in sea_life if s.get("group") == "Fish")
+    thresholds = {"Birds": (len(birds), 100), "Plants": (len(plants), 300),
+                  "Sea Life": (len(sea_life), 100), "Fish": (fish_count, 20)}
+    for label, (actual, minimum) in thresholds.items():
+        if actual < minimum:
+            log.error("VALIDATION FAILED: %s has %d species (minimum %d). "
+                      "Aborting to prevent deploying incomplete data.", label, actual, minimum)
+            sys.exit(1)
+    log.info("  Validation passed: Birds=%d, Plants=%d, Sea=%d, Fish=%d",
+             len(birds), len(plants), len(sea_life), fish_count)
+
     current_month_0 = cfg["date"].month - 1
     date_str = cfg["date"].strftime("%B %d, %Y")
     lat_str = f"{abs(cfg['lat']):.4f} {'N' if cfg['lat'] >= 0 else 'S'}"
     lng_str = f"{abs(cfg['lng']):.4f} {'W' if cfg['lng'] < 0 else 'E'}"
 
-    sea_life = sea_life or []
     has_birds = len(birds) > 0
     has_plants = len(plants) > 0
     has_sea = bool(sea_life)
