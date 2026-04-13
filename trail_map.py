@@ -822,10 +822,10 @@ function initMap(){
   function bp(ly,fn){ly.eachLayer(function(l){var p=l.feature&&l.feature.properties;if(p)l.bindPopup(fn(p));});}
   function nm(p){return '<b>'+(p.name||'Unnamed')+'</b>';}
 
-  _mapLayers.hiking=L.geoJSON(mapData_hiking,{style:ps('#D4820F','8 4')});
+  _mapLayers.hiking=L.geoJSON(mapData_hiking,{style:ps('#D4820F','8 4'),pointToLayer:cm('#D4820F',4)});
   bp(_mapLayers.hiking,function(p){return '<b>'+(p.name||'Trail')+'</b>'+(p.surface?'<br>Surface: '+p.surface:'');});
 
-  _mapLayers.bike=L.geoJSON(mapData_bike,{style:ps('#2E6B94')});
+  _mapLayers.bike=L.geoJSON(mapData_bike,{style:ps('#2E6B94'),pointToLayer:cm('#2E6B94',4)});
   bp(_mapLayers.bike,function(p){return '<b>'+(p.name||'Bike Route')+'</b>';});
 
   function beachStyle(color){return function(){return{color:color,weight:3,opacity:.8,fillOpacity:.2,pane:'areas'};};}
@@ -843,16 +843,16 @@ function initMap(){
     filter:function(f){var a=f.properties.access;return a==='private'||a==='no';},
     style:beachStyle('__CLR_BEACHES_PRIVATE__'),onEachFeature:beachPopup,pointToLayer:cm('__CLR_BEACHES_PRIVATE__',6)});
 
-  _mapLayers.state_parks=L.geoJSON(mapData_state_parks,{style:ps('#3A7D50')});
+  _mapLayers.state_parks=L.geoJSON(mapData_state_parks,{style:ps('#3A7D50'),pointToLayer:cm('#3A7D50',6)});
   bp(_mapLayers.state_parks,function(p){return '<b>'+(p.name||'State Park')+'</b>'+(p.protection_title?'<br>'+p.protection_title:'');});
 
-  _mapLayers.wilderness=L.geoJSON(mapData_wilderness,{style:ps('#4A6A3A')});
+  _mapLayers.wilderness=L.geoJSON(mapData_wilderness,{style:ps('#4A6A3A'),pointToLayer:cm('#4A6A3A',6)});
   bp(_mapLayers.wilderness,nm);
 
-  _mapLayers.refuges=L.geoJSON(mapData_refuges,{style:ps('#2A7A7A')});
+  _mapLayers.refuges=L.geoJSON(mapData_refuges,{style:ps('#2A7A7A'),pointToLayer:cm('#2A7A7A',6)});
   bp(_mapLayers.refuges,function(p){return '<b>'+(p.name||'Wildlife Refuge')+'</b>';});
 
-  _mapLayers.forests=L.geoJSON(mapData_forests,{style:ps('#2D5A1E')});
+  _mapLayers.forests=L.geoJSON(mapData_forests,{style:ps('#2D5A1E'),pointToLayer:cm('#2D5A1E',6)});
   bp(_mapLayers.forests,nm);
 
   _mapLayers.lighthouses=L.geoJSON(mapData_lighthouses,{
