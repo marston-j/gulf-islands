@@ -3310,15 +3310,15 @@ def build_sea_life_card(entry: dict, current_month_0: int, cfg: dict) -> str:
     desc = esc(entry.get("facts", ""))
     inat_count = entry.get("inat_count", 0)
 
-    src1 = resolve_img_src(entry, 1, cfg["output_dir"])
-    src2 = resolve_img_src(entry, 2, cfg["output_dir"])
+    img1 = entry.get("image_1", "")
+    img2 = entry.get("image_2", "")
 
-    if src1:
-        layer1 = f'<div class="img-layer active" style="background-image:url(\'{src1}\')"></div>'
+    if img1:
+        layer1 = f'<div class="img-layer active" style="background-image:url(\'{esc_img_path(img1)}\')"></div>'
     else:
         layer1 = '<div class="img-layer active" style="background:#ddd"></div>'
-    if src2:
-        layer2 = f'<div class="img-layer" style="background-image:url(\'{src2}\')"></div>'
+    if img2:
+        layer2 = f'<div class="img-layer" style="background-image:url(\'{esc_img_path(img2)}\')"></div>'
         flip_btn = '<button class="flip-btn" onclick="flipImg(this)">&#8644;</button>'
     else:
         layer2 = ""
@@ -3647,15 +3647,15 @@ def build_plant_card(plant: dict, current_month_0: int, cfg: dict) -> str:
     conservation = plant.get("conservation", "")
     inat_count = plant.get("inat_count", 0)
 
-    src1 = resolve_img_src(plant, 1, cfg["output_dir"])
-    src2 = resolve_img_src(plant, 2, cfg["output_dir"])
+    img1 = plant.get("image_1", "")
+    img2 = plant.get("image_2", "")
 
-    if src1:
-        layer1 = f'<div class="img-layer active" style="background-image:url(\'{src1}\')"></div>'
+    if img1:
+        layer1 = f'<div class="img-layer active" style="background-image:url(\'{esc_img_path(img1)}\')"></div>'
     else:
         layer1 = '<div class="img-layer active" style="background:#ddd"></div>'
-    if src2:
-        layer2 = f'<div class="img-layer" style="background-image:url(\'{src2}\')"></div>'
+    if img2:
+        layer2 = f'<div class="img-layer" style="background-image:url(\'{esc_img_path(img2)}\')"></div>'
         flip_btn = '<button class="flip-btn" onclick="flipImg(this)">&#8644;</button>'
     else:
         layer2 = ""
