@@ -48,7 +48,7 @@ Thumbs.db
 output/*/index.html
 output/*/birds.csv
 output/*/plants.csv
-output/*/images/
+# output/*/images/  # needed for deployment
 output/*/.bird_cache.json
 output/*/.plant_cache.json
 output/*/.map_cache.json
