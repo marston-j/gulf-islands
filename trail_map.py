@@ -771,7 +771,7 @@ HEAD_CDN = (
     "default-src 'none';"
     "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net;"
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com https://cdn.jsdelivr.net;"
-    "img-src 'self' data: https://cdn.download.ams.birds.cornell.edu https://*.basemaps.cartocdn.com https://*.tile.openstreetmap.org https://*.tile.opentopomap.org https://server.arcgisonline.com https://tiles.arcgis.com https://gis.charttools.noaa.gov https://unpkg.com https://inaturalist-open-data.s3.amazonaws.com https://static.inaturalist.org;"
+    "img-src 'self' data: https://cdn.download.ams.birds.cornell.edu https://*.basemaps.cartocdn.com https://*.tile.openstreetmap.org https://*.tile.opentopomap.org https://server.arcgisonline.com https://tiles.arcgis.com https://gis.charttools.noaa.gov https://unpkg.com https://inaturalist-open-data.s3.amazonaws.com https://static.inaturalist.org https://upload.wikimedia.org;"
     "font-src https://fonts.gstatic.com;"
     "media-src https://cdn.download.ams.birds.cornell.edu;"
     '"/>\n'

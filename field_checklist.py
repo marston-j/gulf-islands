@@ -540,6 +540,18 @@ def esc_img_path(path: str) -> str:
     return path.replace("'", "%27").replace("&", "&amp;").replace('"', "%22")
 
 
+def resolve_img_src(entry: dict, idx: int, output_dir: Path) -> str:
+    """Return the best available image source for a species card.
+    Prefers local file; falls back to stored URL; returns '' if neither exists."""
+    local = entry.get(f"image_{idx}", "")
+    if local and (output_dir / local).exists():
+        return esc_img_path(local)
+    url = entry.get(f"image_url_{idx}", "")
+    if url:
+        return esc(url)
+    return ""
+
+
 def download_image(url: str, dest: Path, retries: int = 3) -> bool:
     dest.parent.mkdir(parents=True, exist_ok=True)
     for attempt in range(1, retries + 1):
@@ -901,6 +913,47 @@ def inat_observation_photos(taxon_id: int, lat: float, lng: float,
         return urls
     except Exception:
         return []
+
+
+def resolve_photo_urls(species_list: list[dict], output_dir: Path, label: str = "species"):
+    """For entries whose local images don't exist, resolve iNaturalist photo URLs
+    and store them as image_url_1/image_url_2 in the entry dict."""
+    need = [e for e in species_list
+            if not e.get("image_url_1")
+            and e.get("image_1")
+            and not (output_dir / e["image_1"]).exists()]
+    if not need:
+        log.info("  %s: all %d entries already have image URLs or local files", label, len(species_list))
+        return
+    log.info("  %s: resolving photo URLs for %d entries...", label, len(need))
+    resolved = 0
+    for i, entry in enumerate(need):
+        sci = entry.get("scientific_name", "")
+        if not sci:
+            continue
+        tid = entry.get("taxon_id")
+        if not tid:
+            try:
+                resp = requests.get(f"{INAT_API}/taxa", params={"q": sci, "rank": "species", "per_page": 1},
+                                    headers=HEADERS, timeout=15)
+                results = resp.json().get("results", [])
+                if results:
+                    tid = results[0]["id"]
+                    entry["taxon_id"] = tid
+            except Exception:
+                pass
+        if not tid:
+            continue
+        urls = inat_taxon_photos(tid, limit=4)
+        if urls:
+            entry["image_url_1"] = urls[0]
+            if len(urls) > 1:
+                entry["image_url_2"] = urls[1]
+            resolved += 1
+        if (i + 1) % 50 == 0:
+            log.info("    ... %d/%d", i + 1, len(need))
+        time.sleep(0.35)
+    log.info("  %s: resolved URLs for %d / %d entries", label, resolved, len(need))
 
 
 def inat_batch_taxon_families(taxon_ids: list[int]) -> dict[int, str]:
@@ -3257,15 +3310,15 @@ def build_sea_life_card(entry: dict, current_month_0: int, cfg: dict) -> str:
     desc = esc(entry.get("facts", ""))
     inat_count = entry.get("inat_count", 0)
 
-    img1 = entry.get("image_1", "")
-    img2 = entry.get("image_2", "")
+    src1 = resolve_img_src(entry, 1, cfg["output_dir"])
+    src2 = resolve_img_src(entry, 2, cfg["output_dir"])
 
-    if img1:
-        layer1 = f'<div class="img-layer active" style="background-image:url(\'{esc_img_path(img1)}\')"></div>'
+    if src1:
+        layer1 = f'<div class="img-layer active" style="background-image:url(\'{src1}\')"></div>'
     else:
         layer1 = '<div class="img-layer active" style="background:#ddd"></div>'
-    if img2:
-        layer2 = f'<div class="img-layer" style="background-image:url(\'{esc_img_path(img2)}\')"></div>'
+    if src2:
+        layer2 = f'<div class="img-layer" style="background-image:url(\'{src2}\')"></div>'
         flip_btn = '<button class="flip-btn" onclick="flipImg(this)">&#8644;</button>'
     else:
         layer2 = ""
@@ -3594,15 +3647,15 @@ def build_plant_card(plant: dict, current_month_0: int, cfg: dict) -> str:
     conservation = plant.get("conservation", "")
     inat_count = plant.get("inat_count", 0)
 
-    img1 = plant.get("image_1", "")
-    img2 = plant.get("image_2", "")
+    src1 = resolve_img_src(plant, 1, cfg["output_dir"])
+    src2 = resolve_img_src(plant, 2, cfg["output_dir"])
 
-    if img1:
-        layer1 = f'<div class="img-layer active" style="background-image:url(\'{esc_img_path(img1)}\')"></div>'
+    if src1:
+        layer1 = f'<div class="img-layer active" style="background-image:url(\'{src1}\')"></div>'
     else:
         layer1 = '<div class="img-layer active" style="background:#ddd"></div>'
-    if img2:
-        layer2 = f'<div class="img-layer" style="background-image:url(\'{esc_img_path(img2)}\')"></div>'
+    if src2:
+        layer2 = f'<div class="img-layer" style="background-image:url(\'{src2}\')"></div>'
         flip_btn = '<button class="flip-btn" onclick="flipImg(this)">&#8644;</button>'
     else:
         layer2 = ""
@@ -4077,6 +4130,15 @@ Example:
         }
         log.info("  Birds: %d  Plants: %d  Sea Life: %d",
                  len(birds), len(plants), len(sea_life))
+
+        log.info("\nResolving remote image URLs where local files are missing...")
+        resolve_photo_urls(plants, output_dir, "Plants")
+        resolve_photo_urls(sea_life, output_dir, "Sea life")
+        snap["plants"] = plants
+        snap["sea_life"] = sea_life
+        snapshot_path.write_text(json.dumps(snap, indent=2, ensure_ascii=False))
+        log.info("  Snapshot updated with image URLs")
+
         log.info("")
         log.info("Generating combined HTML...")
         generate_html(birds, plants, cfg, sea_life)
