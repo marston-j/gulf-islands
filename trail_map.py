@@ -75,7 +75,6 @@ LAYER_DEFS = {
     "ebird_obs":   {"label": "eBird Obs (30 d)",     "color": "#1A6B3A", "on": False},
     "bathymetry":  {"label": "Gulf Bathymetry",      "color": "#1A5276", "on": False, "tile": True},
     "noaa_charts": {"label": "NOAA Nautical Charts", "color": "#1B4F72", "on": False, "tile": True},
-    "currents":    {"label": "Ocean Surface Currents", "color": "#2874A6", "on": False, "tile": True},
 }
 
 # ─── Caching ───────────────────────────────────────────────────────
@@ -961,8 +960,6 @@ function initMap(){
   _mapLayers.bathymetry=L.tileLayer('https://tiles.arcgis.com/tiles/C8EMgrsFcRFL6LrL/arcgis/rest/services/Gulf_Wide_Bathymetry/MapServer/tile/{z}/{y}/{x}',{opacity:0.5,maxZoom:10,pane:'tileOverlays',attribution:'NOAA NCEI Gulf Bathymetry'});
   var NOAAChartLayer=L.TileLayer.extend({getTileUrl:function(coords){var z=Math.max(0,coords.z-2);return 'https://gis.charttools.noaa.gov/arcgis/rest/services/MarineChart_Services/NOAACharts/MapServer/WMTS/tile/1.0.0/MarineChart_Services_NOAACharts/default/GoogleMapsCompatible/'+z+'/'+coords.y+'/'+coords.x+'.png';}});
   _mapLayers.noaa_charts=new NOAAChartLayer('',{opacity:0.6,minZoom:3,maxZoom:17,pane:'tileOverlays',attribution:'NOAA Chart Display'});
-  _mapLayers.currents=L.imageOverlay('currents.png',[[10,-100],[45,-60]],{opacity:0.65,pane:'tileOverlays',attribution:'NOAA AOML Ocean Surface Currents 2005\u20132023'});
-
   var defaults=__DEFAULTS_OBJ__;
   for(var k in _mapLayers){if(defaults[k])_mapLayers[k].addTo(_map);}
   _map.fitBounds([[__SOUTH__,__WEST__],[__NORTH__,__EAST__]]);
@@ -1069,78 +1066,6 @@ def build_parts(layers: dict, bbox: tuple) -> dict:
 
 
 # ─── Inject into existing index.html ─────────────────────────────
-
-def generate_currents_png(out_path: Path):
-    """Fetch NOAA AOML ocean surface current tiles (LERC), reproject to
-    Web Mercator, and save as a PNG overlay for Leaflet."""
-    import math
-    try:
-        import lerc as lerc_mod
-        import numpy as np
-        from PIL import Image
-    except ImportError:
-        log.warning("  Missing lerc/numpy/Pillow — skipping currents PNG")
-        return
-
-    ORIG_LAT, ORIG_LNG, RES, TSZ = 85.0, -180.0, 0.25, 256
-    TILE_DEG = RES * TSZ
-    base = ("https://tiledimageservices.arcgis.com/P3ePLMYs2RVChkJx/"
-            "arcgis/rest/services/annual_drifter_mean_v3/ImageServer/tile")
-    tiles = [(2, 0, 1), (2, 0, 2), (2, 1, 1), (2, 1, 2)]
-    min_col, max_col, min_row, max_row = 1, 2, 0, 1
-    gw = (max_col - min_col + 1) * TSZ
-    gh = (max_row - min_row + 1) * TSZ
-    mag = np.full((gh, gw), np.nan, dtype=np.float64)
-
-    for lv, r, c in tiles:
-        try:
-            resp = requests.get(f"{base}/{lv}/{r}/{c}", timeout=30)
-            resp.raise_for_status()
-            _, data, _ = lerc_mod.decode(resp.content)
-            band = data[0] if data.ndim == 3 else data
-            px, py = (c - min_col) * TSZ, (r - min_row) * TSZ
-            mag[py:py + band.shape[0], px:px + band.shape[1]] = band
-            log.info("  Tile %d/%d/%d decoded", lv, r, c)
-        except Exception as exc:
-            log.warning("  Tile %d/%d/%d failed: %s", lv, r, c, exc)
-
-    full_w = ORIG_LNG + min_col * TILE_DEG
-    full_n = ORIG_LAT - min_row * TILE_DEG
-
-    CROP_W, CROP_E, CROP_S, CROP_N = -100.0, -60.0, 10.0, 45.0
-
-    def _merc(lat):
-        return math.log(math.tan(math.pi / 4 + math.radians(min(max(lat, -85), 85)) / 2))
-
-    def _inv_merc(y):
-        return math.degrees(2 * math.atan(math.exp(y)) - math.pi / 2)
-
-    mn, ms = _merc(CROP_N), _merc(CROP_S)
-    mr = mn - ms
-    OW = 800
-    OH = max(1, int(OW * mr / math.radians(CROP_E - CROP_W)))
-
-    arr = np.zeros((OH, OW, 4), dtype=np.uint8)
-    for oy in range(OH):
-        lat = _inv_merc(mn - (oy / OH) * mr)
-        ri = int((full_n - lat) / RES)
-        if ri < 0 or ri >= gh:
-            continue
-        for ox in range(OW):
-            lng = CROP_W + (ox / OW) * (CROP_E - CROP_W)
-            ci = int((lng - full_w) / RES)
-            if ci < 0 or ci >= gw:
-                continue
-            v = mag[ri, ci]
-            if np.isnan(v) or v < 1e-6 or v > 1e30:
-                continue
-            n = min(v / 0.8, 1.0)
-            arr[oy, ox] = [int(20 + n * 210), int(80 - n * 50),
-                           int(200 - n * 170), int(100 + n * 155)]
-
-    Image.fromarray(arr, "RGBA").save(str(out_path), "PNG", optimize=True)
-    log.info("  Saved %s (%d KB)", out_path.name, out_path.stat().st_size // 1024)
-
 
 def inject_map_tab(target: Path, parts: dict):
     backup = target.with_name(".index_pre_map.html")
@@ -1276,14 +1201,6 @@ def main():
     for key, ld in LAYER_DEFS.items():
         cnt = len(layers.get(key, {}).get("features", []))
         log.info("  %-26s %5d features", ld["label"], cnt)
-
-    # ── Ocean currents overlay ──
-    currents_png = output_dir / "currents.png"
-    if not currents_png.exists():
-        log.info("\nGenerating Ocean Surface Currents overlay...")
-        generate_currents_png(currents_png)
-    else:
-        log.info("\nUsing cached currents.png")
 
     # ── Build & inject ──
     log.info("\nStep 3/3  Injecting map tab into %s...", target.name)
