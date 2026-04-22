@@ -50,6 +50,15 @@ HEADERS = {"User-Agent": "TrailMapBuilder/1.0 (field-checklist)"}
 
 NPS_NRHP_API = "https://mapservices.nps.gov/arcgis/rest/services/cultural_resources/nrhp_locations/MapServer"
 
+NIFC_FIRE_PERIMETERS = (
+    "https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/"
+    "WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query"
+)
+NOAA_HMS_SMOKE = (
+    "https://services2.arcgis.com/C8EMgrsFcRFL6LrL/arcgis/rest/services/"
+    "NOAA_Satellite_Smoke_Detection_(v1)/FeatureServer/0/query"
+)
+
 # Preset bounding boxes for known regions
 BBOX_PRESETS = {
     "gulf-panhandle": "29.5,-88.3,30.85,-84.0",
@@ -73,6 +82,8 @@ LAYER_DEFS = {
     "inat_rare":   {"label": "Rare Species (iNat)",  "color": "#D4380D", "on": False},
     "hotspots":    {"label": "Birding Hotspots",     "color": "#8B4513", "on": True},
     "ebird_obs":   {"label": "eBird Obs (30 d)",     "color": "#1A6B3A", "on": False},
+    "wildfires":   {"label": "Active Wildfires",     "color": "#FF4500", "on": True},
+    "smoke":       {"label": "Smoke Plumes (HMS)",   "color": "#8B6914", "on": False},
     "bathymetry":  {"label": "Gulf Bathymetry",      "color": "#1A5276", "on": False, "tile": True},
     "noaa_charts": {"label": "NOAA Nautical Charts", "color": "#1B4F72", "on": False, "tile": True},
 }
@@ -613,6 +624,91 @@ def fetch_inat_rare(bbox, cache):
     return gj
 
 
+# ─── NIFC Wildfire & NOAA Smoke layers ─────────────────────────────
+
+def fetch_wildfires(bbox, cache):
+    """Fetch active wildfire perimeters from NIFC WFIGS (always live)."""
+    s, w, n, e = bbox
+    features = []
+    try:
+        params = {
+            "where": "1=1",
+            "geometry": f"{w},{s},{e},{n}",
+            "geometryType": "esriGeometryEnvelope",
+            "spatialRel": "esriSpatialRelIntersects",
+            "outFields": "poly_IncidentName,attr_IncidentSize,"
+                         "attr_FireBehaviorGeneral,attr_ContainmentPercent",
+            "returnGeometry": "true",
+            "outSR": "4326",
+            "f": "geojson",
+            "resultRecordCount": 500,
+        }
+        r = requests.get(NIFC_FIRE_PERIMETERS, params=params,
+                         headers=HEADERS, timeout=60)
+        r.raise_for_status()
+        data = r.json()
+        for f in data.get("features", []):
+            props = f.get("properties", {})
+            geom = f.get("geometry")
+            if not geom:
+                continue
+            name = props.get("poly_IncidentName") or "Unknown Fire"
+            acres = props.get("attr_IncidentSize") or 0
+            behavior = props.get("attr_FireBehaviorGeneral") or ""
+            containment = props.get("attr_ContainmentPercent")
+            slim = {"name": name, "acres": acres}
+            if behavior:
+                slim["behavior"] = behavior
+            if containment is not None:
+                slim["containment"] = containment
+            if geom.get("coordinates"):
+                geom = {**geom, "coordinates": _round_coords(geom["coordinates"])}
+            features.append({"type": "Feature", "properties": slim, "geometry": geom})
+    except Exception as exc:
+        log.warning("    NIFC wildfire query failed: %s", exc)
+
+    return {"type": "FeatureCollection", "features": features}
+
+
+def fetch_smoke(bbox, cache):
+    """Fetch NOAA HMS smoke plume polygons (always live, analyst-reviewed)."""
+    s, w, n, e = bbox
+    features = []
+    try:
+        params = {
+            "where": "1=1",
+            "geometry": f"{w},{s},{e},{n}",
+            "geometryType": "esriGeometryEnvelope",
+            "spatialRel": "esriSpatialRelIntersects",
+            "outFields": "Density",
+            "returnGeometry": "true",
+            "outSR": "4326",
+            "f": "geojson",
+            "resultRecordCount": 500,
+        }
+        r = requests.get(NOAA_HMS_SMOKE, params=params,
+                         headers=HEADERS, timeout=60)
+        r.raise_for_status()
+        data = r.json()
+        for f in data.get("features", []):
+            props = f.get("properties", {})
+            geom = f.get("geometry")
+            if not geom:
+                continue
+            density = props.get("Density") or "Unknown"
+            if geom.get("coordinates"):
+                geom = {**geom, "coordinates": _round_coords(geom["coordinates"])}
+            features.append({
+                "type": "Feature",
+                "properties": {"density": density},
+                "geometry": geom,
+            })
+    except Exception as exc:
+        log.warning("    NOAA HMS smoke query failed: %s", exc)
+
+    return {"type": "FeatureCollection", "features": features}
+
+
 # ─── eBird API ────────────────────────────────────────────────────
 
 def fetch_hotspots(bbox, api_key, cache):
@@ -957,6 +1053,18 @@ function initMap(){
   }).addTo(obsCluster);
   _mapLayers.ebird_obs=obsCluster;
 
+  _mapLayers.wildfires=L.geoJSON(mapData_wildfires,{
+    style:function(){return{color:'#FF4500',weight:2,opacity:.9,fillColor:'#FF4500',fillOpacity:.35,pane:'areas'};},
+    pointToLayer:function(f,ll){return L.circleMarker(ll,{radius:7,fillColor:'#FF4500',color:'#fff',weight:2,fillOpacity:.9,pane:'markers'});}
+  });
+  bp(_mapLayers.wildfires,function(p){var s='<b style="color:#D32F2F">\ud83d\udd25 '+(p.name||'Active Fire')+'</b>';if(p.acres)s+='<br><span style="font-size:12px;font-weight:600">'+p.acres.toLocaleString()+' acres</span>';if(p.behavior)s+='<br><span style="font-size:11px;color:#666">Behavior: '+p.behavior+'</span>';if(p.containment!=null)s+='<br><span style="font-size:11px;color:#555">Containment: '+p.containment+'%</span>';s+='<div style="font-size:9px;color:#999;margin-top:4px">Source: NIFC WFIGS</div>';return s;});
+
+  var smokeDensityColors={'Heavy':'#8B0000','Medium':'#CC6600','Light':'#DAA520'};
+  _mapLayers.smoke=L.geoJSON(mapData_smoke,{
+    style:function(f){var d=f.properties.density||'Light';var c=smokeDensityColors[d]||'#DAA520';return{color:c,weight:1,opacity:.6,fillColor:c,fillOpacity:.2,dashArray:'4 4',pane:'areas'};},
+  });
+  bp(_mapLayers.smoke,function(p){var d=p.density||'Unknown';var c=smokeDensityColors[d]||'#999';return '<b style="color:'+c+'">\ud83c\udf2b\ufe0f Smoke Plume</b><br><span style="font-size:12px">Density: <b>'+d+'</b></span><div style="font-size:9px;color:#999;margin-top:4px">Source: NOAA HMS satellite analysis</div>';});
+
   _mapLayers.bathymetry=L.tileLayer('https://tiles.arcgis.com/tiles/C8EMgrsFcRFL6LrL/arcgis/rest/services/Gulf_Wide_Bathymetry/MapServer/tile/{z}/{y}/{x}',{opacity:0.5,maxZoom:10,pane:'tileOverlays',attribution:'NOAA NCEI Gulf Bathymetry'});
   var NOAAChartLayer=L.TileLayer.extend({getTileUrl:function(coords){var z=Math.max(0,coords.z-2);return 'https://gis.charttools.noaa.gov/arcgis/rest/services/MarineChart_Services/NOAACharts/MapServer/WMTS/tile/1.0.0/MarineChart_Services_NOAACharts/default/GoogleMapsCompatible/'+z+'/'+coords.y+'/'+coords.x+'.png';}});
   _mapLayers.noaa_charts=new NOAAChartLayer('',{opacity:0.6,minZoom:3,maxZoom:17,pane:'tileOverlays',attribution:'NOAA Chart Display'});
@@ -1026,7 +1134,8 @@ def build_parts(layers: dict, bbox: tuple) -> dict:
         '<div style="padding:8px 16px;font-size:9px;color:#999;line-height:1.6">'
         'Map data: OpenStreetMap, NPS National Register of Historic Places, '
         'eBird (Cornell Lab of Ornithology), iNaturalist, '
-        'OSM Protected Areas, NOAA NERR. '
+        'OSM Protected Areas, NOAA NERR, '
+        'NIFC WFIGS (active wildfires), NOAA HMS (smoke detection). '
         'Tiles: CartoDB, OpenTopoMap, Esri World Imagery.</div></div>'
     )
 
@@ -1171,6 +1280,8 @@ def main():
         ("critical_wildlife", fetch_critical_wildlife, "Protected wildlife areas"),
         ("nerrs",             fetch_nerrs,             "Estuarine reserves"),
         ("inat_rare",         fetch_inat_rare,         "Rare species (iNat)"),
+        ("wildfires",         fetch_wildfires,         "Active wildfires (NIFC)"),
+        ("smoke",             fetch_smoke,             "Smoke plumes (NOAA HMS)"),
     ]
     total_osm = len(fetchers)
     for i, (key, fn, label) in enumerate(fetchers, 1):

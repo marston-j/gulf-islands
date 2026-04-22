@@ -135,6 +135,8 @@ output/gulf-islands/
 | eBird Observations | [eBird API](https://ebird.org/) `/v2/data/obs/geo/recent` | Clustered markers |
 | Gulf Bathymetry | [NOAA NCEI](https://data.noaa.gov/) Gulf-wide DEM (ArcGIS tiles) | Tile overlay |
 | NOAA Nautical Charts | [NOAA Chart Display Service](https://gis.charttools.noaa.gov/) WMTS | Tile overlay |
+| Active Wildfires | [NIFC WFIGS](https://data-nifc.opendata.arcgis.com/) current fire perimeters (ArcGIS FeatureServer) | GeoJSON (live) |
+| Smoke Plumes | [NOAA HMS](https://www.ospo.noaa.gov/products/land/hms.html) satellite smoke detection (ArcGIS FeatureServer) | GeoJSON (live) |
 | Ocean Surface Currents | [NOAA/AOML](https://www.aoml.noaa.gov/) drifter-derived climatology (ArcGIS ImageServer) | WMS overlay |
 | Base Camp marker | Fixed coordinate (42 Banfill Rd, Grayton Beach) | Star icon |
 

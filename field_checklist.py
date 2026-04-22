@@ -4139,6 +4139,21 @@ Example:
         snapshot_path.write_text(json.dumps(snap, indent=2, ensure_ascii=False))
         log.info("  Snapshot updated with image URLs")
 
+        if args.tide_dates:
+            parts = args.tide_dates.split(",")
+            if len(parts) == 2:
+                log.info("\nRefreshing moon phase data for %s – %s...", parts[0], parts[1])
+                cfg["moon_html"] = compute_moon_phases(parts[0], parts[1])
+                log.info("Refreshing weather forecast for %s – %s...", parts[0], parts[1])
+                cfg["weather_html"] = compute_weather_forecast(
+                    cfg["lat"], cfg["lng"], parts[0], parts[1]
+                )
+                snap["cfg"]["moon_html"] = cfg["moon_html"]
+                snap["cfg"]["weather_html"] = cfg["weather_html"]
+                snapshot_path.write_text(
+                    json.dumps(snap, ensure_ascii=False))
+                log.info("  Snapshot updated with fresh weather/moon data")
+
         log.info("")
         log.info("Generating combined HTML...")
         generate_html(birds, plants, cfg, sea_life)
