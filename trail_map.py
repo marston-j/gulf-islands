@@ -76,8 +76,7 @@ LAYER_DEFS = {
     "refuges":     {"label": "Wildlife Refuges",     "color": "#2A7A7A", "on": False},
     "forests":     {"label": "State / Nat'l Forests", "color": "#2D5A1E", "on": False},
     "lighthouses": {"label": "Lighthouses",          "color": "#C0392B", "on": True},
-    "heritage":    {"label": "Heritage Sites",       "color": "#7A5230", "on": True},
-    "critical_wildlife": {"label": "Protected Areas", "color": "#C62828", "on": True},
+    "heritage":    {"label": "Historic Architecture", "color": "#7A5230", "on": True},
     "nerrs":       {"label": "Estuarine Reserves",   "color": "#005F73", "on": False},
     "inat_rare":   {"label": "Rare Species (iNat)",  "color": "#D4380D", "on": False},
     "hotspots":    {"label": "Birding Hotspots",     "color": "#8B4513", "on": True},
@@ -1005,12 +1004,6 @@ function initMap(){
     }
   });
 
-  _mapLayers.critical_wildlife=L.geoJSON(mapData_critical_wildlife,{
-    style:ps('#C62828','4 4'),
-    pointToLayer:function(f,ll){return L.circleMarker(ll,{radius:7,fillColor:'#C62828',color:'#fff',weight:2,fillOpacity:.9,pane:'markers'});}
-  });
-  bp(_mapLayers.critical_wildlife,function(p){var s='<b style="font-size:14px">'+(p.name||'Protected Area')+'</b>';if(p.protection_title)s+='<br><span style="font-size:12px;color:#444">'+p.protection_title+'</span>';if(p.protect_class){var cls={'1':'Strict Nature Reserve','1a':'Strict Nature Reserve','1b':'Wilderness Area','2':'National Park','3':'Natural Monument','4':'Habitat/Species Management'};s+='<br><span style="font-size:11px;color:#555">IUCN Category '+(cls[p.protect_class]||p.protect_class)+' (Class '+p.protect_class+')</span>';}if(p.operator)s+='<br><span style="font-size:11px;color:#666">Managed by '+p.operator+'</span>';if(p.ownership)s+='<br><span style="font-size:11px;color:#666">Ownership: '+p.ownership+'</span>';if(p.opening_hours)s+='<br><span style="font-size:11px;color:#666">Hours: '+p.opening_hours+'</span>';var links=[];if(p.website)links.push('<a href="'+p.website+'" target="_blank" rel="noopener" style="font-size:11px;color:#2E6B94">Official site &#8599;</a>');if(p.wikipedia){var wp=p.wikipedia.replace(/^en:/,'');links.push('<a href="https://en.wikipedia.org/wiki/'+encodeURIComponent(wp)+'" target="_blank" rel="noopener" style="font-size:11px;color:#2E6B94">Wikipedia &#8599;</a>');}else if(p.wikidata){links.push('<a href="https://www.wikidata.org/wiki/'+p.wikidata+'" target="_blank" rel="noopener" style="font-size:11px;color:#2E6B94">Wikidata &#8599;</a>');}if(links.length)s+='<br><div style="margin-top:4px;display:flex;gap:10px">'+links.join('')+'</div>';return s;});
-
   _mapLayers.nerrs=L.geoJSON(mapData_nerrs,{style:ps('#005F73','4 6')});
   bp(_mapLayers.nerrs,function(p){return '<b>'+(p.name||'Estuarine Reserve')+'</b>'+(p.protection_title?'<br>'+p.protection_title:'');});
 
@@ -1133,8 +1126,7 @@ def build_parts(layers: dict, bbox: tuple) -> dict:
         '<div class="panel" id="panel-map"><div id="leaflet-map"></div>'
         '<div style="padding:8px 16px;font-size:9px;color:#999;line-height:1.6">'
         'Map data: OpenStreetMap, NPS National Register of Historic Places, '
-        'eBird (Cornell Lab of Ornithology), iNaturalist, '
-        'OSM Protected Areas, NOAA NERR, '
+        'eBird (Cornell Lab of Ornithology), iNaturalist, NOAA NERR, '
         'NIFC WFIGS (active wildfires), NOAA HMS (smoke detection). '
         'Tiles: CartoDB, OpenTopoMap, Esri World Imagery.</div></div>'
     )
@@ -1280,8 +1272,7 @@ def main():
         ("refuges",           fetch_refuges,           "Wildlife refuges"),
         ("forests",           fetch_forests,            "State/nat'l forests"),
         ("lighthouses",       fetch_lighthouses,       "Lighthouses"),
-        ("heritage",          fetch_heritage,          "Heritage sites"),
-        ("critical_wildlife", fetch_critical_wildlife, "Protected wildlife areas"),
+        ("heritage",          fetch_heritage,          "Historic architecture"),
         ("nerrs",             fetch_nerrs,             "Estuarine reserves"),
         ("inat_rare",         fetch_inat_rare,         "Rare species (iNat)"),
         ("wildfires",         fetch_wildfires,         "Active wildfires (NIFC)"),
