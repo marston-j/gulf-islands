@@ -1179,7 +1179,11 @@ def build_parts(layers: dict, bbox: tuple) -> dict:
 def inject_map_tab(target: Path, parts: dict):
     backup = target.with_name(".index_pre_map.html")
 
-    if backup.exists():
+    if backup.exists() and target.stat().st_mtime > backup.stat().st_mtime:
+        log.info("Target is newer than backup — refreshing clean backup")
+        html = target.read_text(encoding="utf-8")
+        backup.write_text(html, encoding="utf-8")
+    elif backup.exists():
         log.info("Restoring clean backup before re-injection")
         html = backup.read_text(encoding="utf-8")
     else:
