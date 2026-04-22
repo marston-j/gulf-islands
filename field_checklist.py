@@ -2240,16 +2240,40 @@ def run_birds(cfg: dict) -> list[dict]:
 
     log.info("  Downloaded %d / %d bird images", success, len(birds))
 
-    log.info("\nStep 4: Bird seasonality from eBird presence...")
-    target_month = cfg["date"].month
-    adj_prev = ((target_month - 2) % 12)
-    adj_next = target_month % 12
-    for bird in birds:
-        seas = [1] * 12
-        seas[target_month - 1] = 2
-        seas[adj_prev] = 2
-        seas[adj_next] = 2
-        bird["seasonality"] = seas
+    log.info("\nStep 4: Bird seasonality from iNaturalist histograms...")
+    for i, bird in enumerate(birds):
+        sci = bird.get("sci_name", "")
+        cache_key = f"bird:{sci}" if sci else ""
+        if cache_key and cache_key in seasonality:
+            bird["seasonality"] = seasonality[cache_key]
+            continue
+        tid = None
+        if sci:
+            try:
+                resp = requests.get(
+                    f"{INAT_API}/taxa",
+                    params={"q": sci, "rank": "species", "per_page": 1},
+                    headers=HEADERS, timeout=15,
+                )
+                results = resp.json().get("results", [])
+                if results:
+                    tid = results[0]["id"]
+            except Exception:
+                pass
+        if tid:
+            log.info("  [%d/%d] %s (iNat %d)", i + 1, len(birds),
+                     bird["common_name"], tid)
+            hist = inat_monthly_histogram(
+                tid, cfg["lat"], cfg["lng"], cfg["radius"])
+            if cache_key:
+                seasonality[cache_key] = hist
+                save_json(seasonality_path, seasonality)
+            bird["seasonality"] = hist
+            time.sleep(0.3)
+        else:
+            log.info("  [%d/%d] %s (no iNat match, using fallback)",
+                     i + 1, len(birds), bird["common_name"])
+            bird["seasonality"] = [0] * 12
 
     csv_path = cfg["output_dir"] / "birds.csv"
     records = []
@@ -4153,6 +4177,56 @@ Example:
                 snapshot_path.write_text(
                     json.dumps(snap, ensure_ascii=False))
                 log.info("  Snapshot updated with fresh weather/moon data")
+
+        seasonality_path = output_dir / ".seasonality.json"
+        seasonality = load_json(seasonality_path)
+        for bird in birds:
+            ck = f"bird:{bird.get('sci_name', '')}"
+            if ck in seasonality:
+                bird["seasonality"] = seasonality[ck]
+        need_seas = [b for b in birds
+                     if f"bird:{b.get('sci_name', '')}" not in seasonality]
+        if need_seas:
+            log.info("\nRefreshing bird seasonality from iNaturalist (%d birds)...",
+                     len(need_seas))
+            for i, bird in enumerate(need_seas):
+                sci = bird.get("sci_name", "")
+                cache_key = f"bird:{sci}" if sci else ""
+                tid = None
+                if sci:
+                    try:
+                        resp = requests.get(
+                            f"{INAT_API}/taxa",
+                            params={"q": sci, "rank": "species", "per_page": 1},
+                            headers=HEADERS, timeout=15,
+                        )
+                        results = resp.json().get("results", [])
+                        if results:
+                            tid = results[0]["id"]
+                    except Exception:
+                        pass
+                if tid:
+                    log.info("  [%d/%d] %s (iNat %d)", i + 1, len(need_seas),
+                             bird["common_name"], tid)
+                    hist = inat_monthly_histogram(
+                        tid, cfg["lat"], cfg["lng"], cfg["radius"])
+                    if cache_key:
+                        seasonality[cache_key] = hist
+                        save_json(seasonality_path, seasonality)
+                    bird["seasonality"] = hist
+                    time.sleep(0.3)
+                else:
+                    log.info("  [%d/%d] %s (no iNat match)", i + 1,
+                             len(need_seas), bird["common_name"])
+                    bird["seasonality"] = [0] * 12
+            snap["birds"] = birds
+            snapshot_path.write_text(
+                json.dumps(snap, ensure_ascii=False))
+            log.info("  Snapshot updated with real bird seasonality")
+        else:
+            snap["birds"] = birds
+            snapshot_path.write_text(
+                json.dumps(snap, ensure_ascii=False))
 
         log.info("")
         log.info("Generating combined HTML...")
