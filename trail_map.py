@@ -625,9 +625,9 @@ def fetch_inat_rare(bbox, cache):
 
 # ─── NIFC Wildfire & NOAA Smoke layers ─────────────────────────────
 
-def fetch_wildfires(bbox, cache):
+def fetch_wildfires(bbox, cache, *, wide_bbox=None):
     """Fetch active wildfire perimeters from NIFC WFIGS (always live)."""
-    s, w, n, e = bbox
+    s, w, n, e = wide_bbox or bbox
     features = []
     try:
         params = {
@@ -1241,10 +1241,13 @@ def main():
                         help="Existing index.html to inject Map tab into")
     parser.add_argument("--output", type=Path, default=None,
                         help="Cache directory (default: target parent)")
+    parser.add_argument("--fire-bbox", default=None,
+                        help="Wider bounding box S,W,N,E for wildfire queries")
     args = parser.parse_args()
 
     bbox_str = BBOX_PRESETS.get(args.bbox, args.bbox)
     bbox = parse_bbox(bbox_str)
+    fire_bbox = parse_bbox(args.fire_bbox) if args.fire_bbox else None
     target = args.target.resolve()
     if not target.exists():
         parser.error(f"Target not found: {target}")
@@ -1281,7 +1284,10 @@ def main():
     total_osm = len(fetchers)
     for i, (key, fn, label) in enumerate(fetchers, 1):
         log.info("  [%d/%d] %s", i, total_osm, label)
-        layers[key] = fn(bbox, cache)
+        if key == "wildfires" and fire_bbox:
+            layers[key] = fn(bbox, cache, wide_bbox=fire_bbox)
+        else:
+            layers[key] = fn(bbox, cache)
         save_cache(cache_path, cache)
 
     # ── eBird layers ──
